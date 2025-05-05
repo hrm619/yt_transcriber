@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- Think carefully and only action the specific task I have given you with the most concise and elegant solution that changes as little code as possible
+- Prefer the simplest solutions
+- Prefer opensource 
+- Never create fake data in production
