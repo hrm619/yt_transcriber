@@ -10,6 +10,8 @@ A powerful Python pipeline for downloading YouTube videos, transcribing them usi
 - Support for batch processing multiple videos
 - Handles private videos using browser cookies
 - Efficient audio downloading with chunked transfers
+- **NEW**: Automated YouTube channel video fetching with date filtering
+- **NEW**: YouTube Data API v3 integration for accurate metadata
 - Organized output directory structure
 
 ## Prerequisites
@@ -17,6 +19,7 @@ A powerful Python pipeline for downloading YouTube videos, transcribing them usi
 - Python 3.8+
 - [uv](https://github.com/astral-sh/uv) for package management
 - FFmpeg (for audio processing)
+- YouTube Data API v3 key (for channel video fetching)
 
 ## Installation
 
@@ -39,6 +42,12 @@ source .venv/bin/activate  # On Unix/macOS
 uv pip install -r requirements.txt
 ```
 
+4. Set up YouTube Data API v3 (for channel video fetching):
+```bash
+python setup_api.py
+```
+This will guide you through getting and setting up your YouTube API key.
+
 ## Usage
 
 ### Single Video Processing
@@ -57,9 +66,21 @@ python run_pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-from
 python run_pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-file path/to/cookies.txt
 ```
 
+### Automated Channel Video Fetching
+
+Fetch recent videos from a YouTube channel (published after January 1, 2025):
+
+```bash
+# Fetch videos and optionally save to config/urls.txt
+python src/yt_transcriber/core/url_update.py
+
+# Or use the demo script
+python scripts/fetch_recent_videos.py
+```
+
 ### Batch Processing
 
-1. Create a `urls.txt` file with YouTube URLs (one per line)
+1. Create a `urls.txt` file with YouTube URLs (one per line), or use the automated fetcher above
 2. Optionally create a `prompt.txt` file with your custom GPT prompt
 3. Run the batch processor:
 ```bash
@@ -72,6 +93,8 @@ python run_batch.py
   - `pipeline.py`: Core YouTube → Whisper → GPT pipeline
   - `batch_processor.py`: Batch processing for multiple videos
   - `config.py`: Configuration settings
+- `src/yt_transcriber/core/`: Core functionality
+  - `url_update.py`: YouTube channel video fetcher with date filtering
 - `data/`: All data storage
   - `raw/audio/`: Downloaded audio files
   - `raw/temp/`: Temporary chunk files
@@ -84,7 +107,9 @@ python run_batch.py
 - `tests/`: Test files
 - `docs/`: Documentation
 - `scripts/`: Utility scripts
+  - `fetch_recent_videos.py`: Demo script for channel video fetching
 - `logs/`: Log files
+- `setup_api.py`: YouTube API setup helper
 
 ## Configuration
 
