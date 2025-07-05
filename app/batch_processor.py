@@ -41,8 +41,8 @@ def read_prompt_from_file(file_path):
 
 def main():
     # Paths to input files
-    urls_file = Path("urls.txt")
-    prompt_file = Path("prompt.txt")
+    urls_file = Path("config/urls.txt")
+    prompt_file = Path("config/prompt.txt")
     
     if not urls_file.exists():
         print(f"Error: {urls_file} not found.")
@@ -76,7 +76,7 @@ def main():
         
         # Build the command to run yt_whisper_pipeline.py
         cmd = [
-            "python", "yt_whisper_pipeline.py",
+            "python", "app/pipeline.py",
             url,
             "--prompt", prompt,
             "--cookies-from-browser", "chrome"  # Change this if needed

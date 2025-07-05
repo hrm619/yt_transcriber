@@ -35,10 +35,10 @@ import time
 
 
 # ---------- Configuration ----------------------------------------------------
-DOWNLOAD_DIR   = Path("downloads")
-TRANSCRIPT_DIR = Path("transcripts")
-SUMMARY_DIR    = Path("summaries")
-CHUNKS_DIR     = Path("chunks")
+DOWNLOAD_DIR = Path("data/raw/audio")
+TRANSCRIPT_DIR = Path("data/processed/transcripts")
+SUMMARY_DIR = Path("data/processed/summaries")
+CHUNKS_DIR = Path("data/raw/temp")
 
 AUDIO_FORMAT   = "m4a"           # Smaller than mp3, no re‑encoding step needed
 WHISPER_MODEL  = "whisper-1"     # OpenAI's latest English/Multilingual model

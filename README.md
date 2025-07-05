@@ -44,17 +44,17 @@ uv pip install -r requirements.txt
 ### Single Video Processing
 
 ```bash
-python yt_whisper_pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID"
+python run_pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
 For private videos, you can use either:
 - Browser cookies:
 ```bash
-python yt_whisper_pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-from-browser chrome
+python run_pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-from-browser chrome
 ```
 - Cookies file:
 ```bash
-python yt_whisper_pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-file path/to/cookies.txt
+python run_pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-file path/to/cookies.txt
 ```
 
 ### Batch Processing
@@ -63,17 +63,28 @@ python yt_whisper_pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID" --cooki
 2. Optionally create a `prompt.txt` file with your custom GPT prompt
 3. Run the batch processor:
 ```bash
-python process_videos.py
+python run_batch.py
 ```
 
 ## Directory Structure
 
-- `downloads/`: Downloaded audio files
-- `transcripts/`: Raw transcripts from Whisper
-- `summaries/`: GPT-generated summaries
-- `chunks/`: Processed text chunks
-- `archive/`: Archived files
-- `backup/`: Backup files
+- `app/`: Main application code
+  - `pipeline.py`: Core YouTube → Whisper → GPT pipeline
+  - `batch_processor.py`: Batch processing for multiple videos
+  - `config.py`: Configuration settings
+- `data/`: All data storage
+  - `raw/audio/`: Downloaded audio files
+  - `raw/temp/`: Temporary chunk files
+  - `processed/transcripts/`: Whisper transcripts
+  - `processed/summaries/`: GPT-generated summaries
+  - `archive/`: Archive and backup data
+- `config/`: Configuration files
+  - `urls.txt`: Input YouTube URLs
+  - `prompt.txt`: GPT prompts
+- `tests/`: Test files
+- `docs/`: Documentation
+- `scripts/`: Utility scripts
+- `logs/`: Log files
 
 ## Configuration
 
