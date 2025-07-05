@@ -15,13 +15,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from src.yt_transcriber.core.url_update import (
     extract_channel_id_from_url,
-    underdog_url,
+    CHANNEL_URLS,
     CUTOFF_DATE
 )
 
 def demonstrate_url_extraction():
     """Demonstrate URL extraction functionality."""
-    print("=== YouTube URL Fetcher Demo ===")
+    print("=== YouTube Multi-Channel URL Fetcher Demo ===")
     print()
     
     # Test different URL formats
@@ -39,7 +39,13 @@ def demonstrate_url_extraction():
         print(f"  → Channel ID: {channel_id}")
         print()
     
-    print(f"Configured channel: {underdog_url}")
+    print(f"Configured channels ({len(CHANNEL_URLS)}):")
+    for name, url in CHANNEL_URLS.items():
+        channel_id = extract_channel_id_from_url(url)
+        print(f"  • {name}: {url}")
+        print(f"    → Channel ID: {channel_id}")
+    print()
+    
     print(f"Cutoff date: {CUTOFF_DATE.strftime('%Y-%m-%d %H:%M:%S UTC')}")
     print()
     
@@ -47,6 +53,7 @@ def demonstrate_url_extraction():
     print("1. Set up a YouTube Data API v3 key")
     print("2. Run: python setup_api.py")
     print("3. Run: python src/yt_transcriber/core/url_update.py")
+    print("   (Will automatically fetch from all channels and organize in dictionary)")
 
 def main():
     """Main demonstration function."""

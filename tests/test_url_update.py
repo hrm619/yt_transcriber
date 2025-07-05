@@ -16,7 +16,9 @@ sys.path.insert(0, str(project_root))
 from src.yt_transcriber.core.url_update import (
     extract_channel_id_from_url,
     YouTubeAPIError,
-    get_api_key
+    get_api_key,
+    CHANNEL_URLS,
+    CUTOFF_DATE
 )
 
 class TestURLExtraction:
@@ -107,14 +109,67 @@ class TestVideoFetching:
         assert result[0]['title'] == 'Test Video 1'
         assert result[0]['url'] == 'https://www.youtube.com/watch?v=test_video_1'
 
+class TestMultiChannelFetching:
+    """Test multi-channel video fetching functionality."""
+    
+    @patch('src.yt_transcriber.core.url_update.fetch_recent_videos')
+    def test_fetch_videos_from_multiple_channels(self, mock_fetch_recent_videos):
+        """Test fetching videos from multiple channels."""
+        from src.yt_transcriber.core.url_update import fetch_videos_from_multiple_channels
+        
+        # Mock the single channel fetch function
+        def mock_fetch(channel_url, cutoff_date):
+            if "JoshandHayden" in channel_url:
+                return ["https://www.youtube.com/watch?v=test1", "https://www.youtube.com/watch?v=test2"]
+            elif "lateroundff" in channel_url:
+                return ["https://www.youtube.com/watch?v=test3"]
+            else:
+                return []
+        
+        mock_fetch_recent_videos.side_effect = mock_fetch
+        
+        # Test with subset of channels
+        test_channels = {
+            "underdog": "https://www.youtube.com/@JoshandHayden/videos",
+            "jj": "https://www.youtube.com/@lateroundff/videos",
+            "empty": "https://www.youtube.com/@EmptyChannel/videos"
+        }
+        
+        cutoff_date = datetime(2025, 4, 1, tzinfo=timezone.utc)
+        result = fetch_videos_from_multiple_channels(test_channels, cutoff_date)
+        
+        # Verify results
+        assert isinstance(result, dict)
+        assert len(result) == 3
+        assert "underdog" in result
+        assert "jj" in result
+        assert "empty" in result
+        
+        assert len(result["underdog"]) == 2
+        assert len(result["jj"]) == 1
+        assert len(result["empty"]) == 0
+        
+        assert result["underdog"][0] == "https://www.youtube.com/watch?v=test1"
+        assert result["jj"][0] == "https://www.youtube.com/watch?v=test3"
+
 def test_constants():
     """Test that constants are properly defined."""
-    from src.yt_transcriber.core.url_update import underdog_url, CUTOFF_DATE
+    # Test CHANNEL_URLS dictionary
+    assert isinstance(CHANNEL_URLS, dict)
+    assert len(CHANNEL_URLS) > 0
+    assert "underdog" in CHANNEL_URLS
+    assert CHANNEL_URLS["underdog"] == "https://www.youtube.com/@JoshandHayden/videos"
     
-    assert underdog_url == "https://www.youtube.com/@JoshandHayden/videos"
+    # Test cutoff date
     assert CUTOFF_DATE.year == 2025
-    assert CUTOFF_DATE.month == 1
+    assert CUTOFF_DATE.month == 4
     assert CUTOFF_DATE.day == 1
+    
+    # Test all URLs are valid format
+    for name, url in CHANNEL_URLS.items():
+        assert url.startswith("https://www.youtube.com/")
+        channel_id = extract_channel_id_from_url(url)
+        assert channel_id is not None, f"Could not extract channel ID from {name}: {url}"
 
 if __name__ == "__main__":
     pytest.main([__file__]) 

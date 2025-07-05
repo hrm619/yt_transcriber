@@ -17,40 +17,53 @@ from datetime import datetime, timezone
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.yt_transcriber.core.url_update import fetch_recent_videos, save_urls_to_file
+from src.yt_transcriber.core.url_update import (
+    fetch_videos_from_multiple_channels, 
+    save_channel_results_to_files,
+    CHANNEL_URLS,
+    CUTOFF_DATE
+)
 
 def main():
-    """Demonstrate fetching recent videos from the Josh and Hayden channel."""
+    """Demonstrate fetching recent videos from multiple channels."""
     
-    # Configuration
-    channel_url = "https://www.youtube.com/@JoshandHayden/videos"
-    cutoff_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
-    
-    print("=== YouTube Recent Videos Fetcher Demo ===")
-    print(f"Channel: {channel_url}")
-    print(f"Cutoff Date: {cutoff_date.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print("=== YouTube Multi-Channel Videos Fetcher Demo ===")
+    print(f"Cutoff Date: {CUTOFF_DATE.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print(f"Channels: {len(CHANNEL_URLS)}")
+    for name, url in CHANNEL_URLS.items():
+        print(f"  • {name}: {url}")
     print()
     
     try:
-        # Fetch recent videos
-        video_urls = fetch_recent_videos(channel_url, cutoff_date)
+        # Fetch recent videos from all channels
+        results = fetch_videos_from_multiple_channels(CHANNEL_URLS, CUTOFF_DATE)
         
-        if not video_urls:
-            print("No videos found matching the criteria.")
+        if not any(results.values()):
+            print("No videos found matching the criteria from any channel.")
             return
         
-        print(f"\n=== Results ===")
-        print(f"Found {len(video_urls)} video URLs:")
-        for i, url in enumerate(video_urls, 1):
-            print(f"{i:2d}. {url}")
+        print(f"\n=== Detailed Results ===")
+        for channel_name, video_urls in results.items():
+            if video_urls:
+                print(f"\n{channel_name.upper()} ({len(video_urls)} videos):")
+                for i, url in enumerate(video_urls, 1):
+                    print(f"  {i:2d}. {url}")
+            else:
+                print(f"\n{channel_name.upper()}: No videos found")
         
-        # Save to file for batch processing
-        save_urls_to_file(video_urls, "config/recent_videos.txt")
+        # Save to organized files for batch processing
+        save_channel_results_to_files(results, "config")
         
         print(f"\n=== Next Steps ===")
+        print("Files created in config/ directory:")
+        print("• all_channels_urls.txt - All videos from all channels")
+        print("• [channel]_urls.txt - Individual channel files")
+        print("• channel_summary.txt - Summary report")
+        print()
         print("You can now process these videos using the batch processor:")
-        print("1. Copy config/recent_videos.txt to config/urls.txt")
+        print("1. Copy config/all_channels_urls.txt to config/urls.txt")
         print("2. Run: python run_batch.py")
+        print("Or process individual channels by copying specific files.")
         
     except Exception as e:
         print(f"Error: {e}")

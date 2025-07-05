@@ -30,11 +30,24 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-# Channel URL to fetch from
-underdog_url = "https://www.youtube.com/@JoshandHayden/videos"
+# Channel URLs to fetch from
+CHANNEL_URLS = {
+    "underdog": "https://www.youtube.com/@JoshandHayden/videos",
+    "jj": "https://www.youtube.com/@lateroundff/videos", 
+    "fpts": "https://www.youtube.com/@FantasyPoints/videos",
+    "pff": "https://www.youtube.com/@ProFootballFocus/videos",
+    "ringer_fantasy": "https://www.youtube.com/@RingerFFS/videos",
+    "ringer_nfl": "https://www.youtube.com/@RingerNFL/videos",
+    "athletic": "https://www.youtube.com/@TAFootballShow/videos"
+}
+
+# Backward compatibility
+underdog_url = CHANNEL_URLS["underdog"]
+
+
 
 # Cutoff date - videos published after this date will be included
-CUTOFF_DATE = datetime(2025, 1, 1, tzinfo=timezone.utc)
+CUTOFF_DATE = datetime(2025, 4, 1, tzinfo=timezone.utc)
 
 class YouTubeAPIError(Exception):
     """Custom exception for YouTube API errors."""
@@ -185,7 +198,9 @@ def get_channel_videos(api_key: str, channel_id: str, published_after: datetime)
 
 def fetch_recent_videos(channel_url: str, cutoff_date: datetime) -> List[str]:
     """
-    Fetch YouTube video URLs from a channel for videos published after the cutoff date.
+    Fetch YouTube video URLs from a single channel for videos published after the cutoff date.
+    
+    This function is used internally by fetch_videos_from_multiple_channels.
     
     Args:
         channel_url: YouTube channel URL
@@ -197,9 +212,6 @@ def fetch_recent_videos(channel_url: str, cutoff_date: datetime) -> List[str]:
     Raises:
         YouTubeAPIError: If API operations fail
     """
-    print(f"Fetching videos from: {channel_url}")
-    print(f"Looking for videos published after: {cutoff_date.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-    
     # Get API key
     api_key = get_api_key()
     
@@ -211,73 +223,150 @@ def fetch_recent_videos(channel_url: str, cutoff_date: datetime) -> List[str]:
     # If it's a handle (starts with @), we need to get the channel ID
     channel_id = channel_identifier
     if channel_url.startswith('https://www.youtube.com/@'):
-        print(f"Resolving channel handle: @{channel_identifier}")
         channel_id = get_channel_id_from_handle(api_key, channel_identifier)
         if not channel_id:
             raise YouTubeAPIError(f"Could not find channel ID for handle: @{channel_identifier}")
-        print(f"Found channel ID: {channel_id}")
     
     # Fetch videos
-    print("Fetching videos...")
     videos = get_channel_videos(api_key, channel_id, cutoff_date)
     
     # Extract URLs
     video_urls = [video['url'] for video in videos]
     
-    print(f"Found {len(video_urls)} videos published after {cutoff_date.strftime('%Y-%m-%d')}")
-    
-    # Print video details for verification
-    if videos:
-        print("\nVideo details:")
-        for i, video in enumerate(videos, 1):
-            published_date = datetime.fromisoformat(video['published_at'].replace('Z', '+00:00'))
-            print(f"{i:2d}. {video['title'][:60]}...")
-            print(f"    Published: {published_date.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-            print(f"    URL: {video['url']}")
-            print()
-    
     return video_urls
 
-def save_urls_to_file(urls: List[str], output_file: str = "config/urls.txt") -> None:
+def fetch_videos_from_multiple_channels(channel_urls: dict, cutoff_date: datetime) -> dict:
     """
-    Save video URLs to a file for use with the batch processor.
+    Fetch YouTube video URLs from multiple channels for videos published after the cutoff date.
     
     Args:
-        urls: List of YouTube video URLs
-        output_file: Path to output file
+        channel_urls: Dictionary with channel names as keys and URLs as values
+        cutoff_date: Only include videos published after this date
+        
+    Returns:
+        Dictionary with channel names as keys and lists of video URLs as values
+        
+    Raises:
+        YouTubeAPIError: If API operations fail
     """
-    output_path = Path(output_file)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"Fetching videos from {len(channel_urls)} channels...")
+    print(f"Looking for videos published after: {cutoff_date.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print()
     
-    with open(output_path, 'w', encoding='utf-8') as f:
-        for url in urls:
-            f.write(f"{url}\n")
+    results = {}
+    total_videos = 0
     
-    print(f"Saved {len(urls)} URLs to {output_file}")
+    for channel_name, channel_url in channel_urls.items():
+        print(f"🔍 Processing channel: {channel_name}")
+        print(f"   URL: {channel_url}")
+        
+        try:
+            # Fetch videos for this channel
+            video_urls = fetch_recent_videos(channel_url, cutoff_date)
+            results[channel_name] = video_urls
+            total_videos += len(video_urls)
+            
+            print(f"   ✅ Found {len(video_urls)} videos")
+            
+        except YouTubeAPIError as e:
+            print(f"   ❌ Error fetching from {channel_name}: {e}")
+            results[channel_name] = []  # Empty list for failed channels
+        except Exception as e:
+            print(f"   ❌ Unexpected error for {channel_name}: {e}")
+            results[channel_name] = []
+        
+        print()  # Empty line between channels
+    
+    print(f"📊 Summary: Found {total_videos} total videos across {len(channel_urls)} channels")
+    
+    # Print summary by channel
+    print("\n📋 Results by channel:")
+    for channel_name, video_urls in results.items():
+        print(f"   {channel_name}: {len(video_urls)} videos")
+    
+    return results
+
+def save_channel_results_to_files(results: dict, output_dir: str = "config") -> None:
+    """
+    Save video URLs from multiple channels to organized files.
+    
+    Args:
+        results: Dictionary with channel names as keys and lists of video URLs as values
+        output_dir: Directory to save files in
+    """
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    # Save all URLs to a single file
+    all_urls = []
+    for channel_name, video_urls in results.items():
+        all_urls.extend(video_urls)
+    
+    if all_urls:
+        all_urls_file = output_path / "all_channels_urls.txt"
+        with open(all_urls_file, 'w', encoding='utf-8') as f:
+            for url in all_urls:
+                f.write(f"{url}\n")
+        print(f"💾 Saved {len(all_urls)} total URLs to {all_urls_file}")
+    
+    # Save individual channel files
+    for channel_name, video_urls in results.items():
+        if video_urls:  # Only create files for channels with videos
+            channel_file = output_path / f"{channel_name}_urls.txt"
+            with open(channel_file, 'w', encoding='utf-8') as f:
+                for url in video_urls:
+                    f.write(f"{url}\n")
+            print(f"💾 Saved {len(video_urls)} URLs from {channel_name} to {channel_file}")
+    
+    # Save a summary file
+    summary_file = output_path / "channel_summary.txt"
+    with open(summary_file, 'w', encoding='utf-8') as f:
+        f.write(f"Video Fetch Summary - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write("=" * 50 + "\n\n")
+        
+        total_videos = sum(len(urls) for urls in results.values())
+        f.write(f"Total videos found: {total_videos}\n")
+        f.write(f"Channels processed: {len(results)}\n")
+        f.write(f"Cutoff date: {CUTOFF_DATE.strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n")
+        
+        f.write("Results by channel:\n")
+        for channel_name, video_urls in results.items():
+            f.write(f"  {channel_name}: {len(video_urls)} videos\n")
+        
+        f.write("\nChannel URLs:\n")
+        for channel_name, channel_url in CHANNEL_URLS.items():
+            f.write(f"  {channel_name}: {channel_url}\n")
+    
+    print(f"📄 Saved summary to {summary_file}")
 
 def main():
     """
-    Main function to fetch recent videos and optionally save to file.
+    Main function to fetch recent videos from all channels and organize in dictionary.
     """
     try:
-        # Fetch recent video URLs
-        video_urls = fetch_recent_videos(underdog_url, CUTOFF_DATE)
+        print("🚀 YouTube Multi-Channel Video Fetcher")
+        print("=" * 50)
         
-        if not video_urls:
-            print("No videos found matching the criteria.")
-            return
+        # Show configuration
+        print(f"📅 Cutoff date: {CUTOFF_DATE.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        print(f"🔗 Channels to process: {len(CHANNEL_URLS)}")
+        for name, url in CHANNEL_URLS.items():
+            print(f"   • {name}: {url}")
+        print()
         
-        # Print URLs
-        print(f"\nFound {len(video_urls)} video URLs:")
-        for i, url in enumerate(video_urls, 1):
-            print(f"{i:2d}. {url}")
+        # Fetch from all channels
+        results = fetch_videos_from_multiple_channels(CHANNEL_URLS, CUTOFF_DATE)
         
-        # Ask user if they want to save to file
-        save_to_file = input(f"\nSave URLs to config/urls.txt? (y/n): ").lower().strip()
+        if not any(results.values()):
+            print("No videos found matching the criteria from any channel.")
+            return results
+        
+        # Ask user if they want to save to files
+        save_to_file = input(f"\nSave URLs to organized files in config/? (y/n): ").lower().strip()
         if save_to_file in ['y', 'yes']:
-            save_urls_to_file(video_urls)
+            save_channel_results_to_files(results)
         
-        return video_urls
+        return results
         
     except YouTubeAPIError as e:
         print(f"Error: {e}", file=sys.stderr)
