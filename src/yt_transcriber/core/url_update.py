@@ -6,7 +6,7 @@ This script fetches YouTube video URLs from a channel for videos published after
 It uses the YouTube Data API v3 to get accurate metadata including publish dates.
 
 Requirements:
-- YouTube Data API v3 key (set as YOUTUBE_API_KEY environment variable)
+- YouTube Data API v3 key (set in .env file as YOUTUBE_API_KEY)
 - python-dateutil for date parsing
 - requests for API calls
 
@@ -25,6 +25,13 @@ import requests
 from datetime import datetime, timezone
 from typing import List, Optional
 from pathlib import Path
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("Warning: python-dotenv not installed. Install with: uv add python-dotenv")
 
 # Add project root to path for imports
 project_root = Path(__file__).parent.parent.parent.parent
