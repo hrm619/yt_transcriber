@@ -257,13 +257,36 @@ class TestChannelFetching:
             "channel3": "https://youtube.com/@channel3"
         }
 
-        cutoff = datetime(2025, 4, 1, tzinfo=timezone.utc)
+        cutoff = datetime(2025, 1, 1, tzinfo=timezone.utc)
         results = channels.fetch_videos_from_multiple_channels(test_channels, cutoff)
 
         assert len(results) == 3
         assert len(results['channel1']) == 2
         assert len(results['channel2']) == 1
         assert len(results['channel3']) == 0
+
+    def test_multi_channel_fetch_default_cutoff(self, monkeypatch):
+        """Test fetching with default cutoff date."""
+        from datetime import datetime, timezone
+
+        # Mock fetch_recent_videos
+        mock_fetch = Mock(return_value=["url1", "url2"])
+        monkeypatch.setattr(channels, 'fetch_recent_videos', mock_fetch)
+
+        test_channels = {"test": "https://youtube.com/@test"}
+
+        # Call without cutoff_date (should use default)
+        results = channels.fetch_videos_from_multiple_channels(test_channels)
+
+        # Verify it was called with a cutoff date that's first day of current month
+        assert mock_fetch.called
+        call_args = mock_fetch.call_args[0]
+        cutoff_used = call_args[1]
+
+        now = datetime.now(timezone.utc)
+        assert cutoff_used.year == now.year
+        assert cutoff_used.month == now.month
+        assert cutoff_used.day == 1
 
 
 class TestUtilities:

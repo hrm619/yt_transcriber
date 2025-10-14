@@ -13,8 +13,8 @@ from yt_transcriber.channels import (
     extract_channel_id_from_url,
     YouTubeAPIError,
     get_api_key,
+    get_default_cutoff_date,
     CHANNEL_URLS,
-    CUTOFF_DATE
 )
 
 class TestURLExtraction:
@@ -112,7 +112,7 @@ class TestMultiChannelFetching:
     def test_fetch_videos_from_multiple_channels(self, mock_fetch_recent_videos):
         """Test fetching videos from multiple channels."""
         from yt_transcriber.channels import fetch_videos_from_multiple_channels
-        
+
         # Mock the single channel fetch function
         def mock_fetch(channel_url, cutoff_date):
             if "JoshandHayden" in channel_url:
@@ -121,17 +121,17 @@ class TestMultiChannelFetching:
                 return ["https://www.youtube.com/watch?v=test3"]
             else:
                 return []
-        
+
         mock_fetch_recent_videos.side_effect = mock_fetch
-        
+
         # Test with subset of channels
         test_channels = {
             "underdog": "https://www.youtube.com/@JoshandHayden/videos",
             "jj": "https://www.youtube.com/@lateroundff/videos",
             "empty": "https://www.youtube.com/@EmptyChannel/videos"
         }
-        
-        cutoff_date = datetime(2025, 4, 1, tzinfo=timezone.utc)
+
+        cutoff_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
         result = fetch_videos_from_multiple_channels(test_channels, cutoff_date)
         
         # Verify results
@@ -155,17 +155,36 @@ def test_constants():
     assert len(CHANNEL_URLS) > 0
     assert "underdog" in CHANNEL_URLS
     assert CHANNEL_URLS["underdog"] == "https://www.youtube.com/@JoshandHayden/videos"
-    
-    # Test cutoff date
-    assert CUTOFF_DATE.year == 2025
-    assert CUTOFF_DATE.month == 4
-    assert CUTOFF_DATE.day == 1
-    
+
     # Test all URLs are valid format
     for name, url in CHANNEL_URLS.items():
         assert url.startswith("https://www.youtube.com/")
         channel_id = extract_channel_id_from_url(url)
         assert channel_id is not None, f"Could not extract channel ID from {name}: {url}"
+
+
+def test_get_default_cutoff_date():
+    """Test that default cutoff date is first day of current month."""
+    cutoff = get_default_cutoff_date()
+
+    # Should be a datetime
+    assert isinstance(cutoff, datetime)
+
+    # Should be in UTC
+    assert cutoff.tzinfo == timezone.utc
+
+    # Should be first day of month
+    assert cutoff.day == 1
+
+    # Should be at midnight
+    assert cutoff.hour == 0
+    assert cutoff.minute == 0
+    assert cutoff.second == 0
+
+    # Should be current year and month
+    now = datetime.now(timezone.utc)
+    assert cutoff.year == now.year
+    assert cutoff.month == now.month
 
 if __name__ == "__main__":
     pytest.main([__file__]) 

@@ -36,7 +36,7 @@ except ImportError:
 # Channel URLs to fetch from
 CHANNEL_URLS = {
     "underdog": "https://www.youtube.com/@JoshandHayden/videos",
-    "jj": "https://www.youtube.com/@lateroundff/videos", 
+    "jj": "https://www.youtube.com/@lateroundff/videos",
     "fpts": "https://www.youtube.com/@FantasyPoints/videos",
     "pff": "https://www.youtube.com/@ProFootballFocus/videos",
     "ringer_fantasy": "https://www.youtube.com/@RingerFFS/videos",
@@ -44,13 +44,16 @@ CHANNEL_URLS = {
     "athletic": "https://www.youtube.com/@TAFootballShow/videos"
 }
 
-# Backward compatibility
-underdog_url = CHANNEL_URLS["underdog"]
 
+def get_default_cutoff_date() -> datetime:
+    """
+    Get default cutoff date (first day of current month).
 
-
-# Cutoff date - videos published after this date will be included
-CUTOFF_DATE = datetime(2025, 4, 1, tzinfo=timezone.utc)
+    Returns:
+        datetime: First day of current month at midnight UTC
+    """
+    now = datetime.now(timezone.utc)
+    return datetime(now.year, now.month, 1, tzinfo=timezone.utc)
 
 class YouTubeAPIError(Exception):
     """Custom exception for YouTube API errors."""
@@ -238,20 +241,23 @@ def fetch_recent_videos(channel_url: str, cutoff_date: datetime) -> List[str]:
     
     return video_urls
 
-def fetch_videos_from_multiple_channels(channel_urls: dict, cutoff_date: datetime) -> dict:
+def fetch_videos_from_multiple_channels(channel_urls: dict, cutoff_date: datetime = None) -> dict:
     """
     Fetch YouTube video URLs from multiple channels for videos published after the cutoff date.
-    
+
     Args:
         channel_urls: Dictionary with channel names as keys and URLs as values
-        cutoff_date: Only include videos published after this date
-        
+        cutoff_date: Only include videos published after this date (defaults to first day of current month)
+
     Returns:
         Dictionary with channel names as keys and lists of video URLs as values
-        
+
     Raises:
         YouTubeAPIError: If API operations fail
     """
+    if cutoff_date is None:
+        cutoff_date = get_default_cutoff_date()
+
     print(f"Fetching videos from {len(channel_urls)} channels...")
     print(f"Looking for videos published after: {cutoff_date.strftime('%Y-%m-%d %H:%M:%S UTC')}")
     print()
@@ -326,11 +332,10 @@ def save_channel_results_to_files(results: dict, output_dir: str = "config") -> 
     with open(summary_file, 'w', encoding='utf-8') as f:
         f.write(f"Video Fetch Summary - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write("=" * 50 + "\n\n")
-        
+
         total_videos = sum(len(urls) for urls in results.values())
         f.write(f"Total videos found: {total_videos}\n")
         f.write(f"Channels processed: {len(results)}\n")
-        f.write(f"Cutoff date: {CUTOFF_DATE.strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n")
         
         f.write("Results by channel:\n")
         for channel_name, video_urls in results.items():
@@ -349,16 +354,19 @@ def main():
     try:
         print("🚀 YouTube Multi-Channel Video Fetcher")
         print("=" * 50)
-        
+
+        # Get default cutoff date
+        cutoff_date = get_default_cutoff_date()
+
         # Show configuration
-        print(f"📅 Cutoff date: {CUTOFF_DATE.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        print(f"📅 Cutoff date: {cutoff_date.strftime('%Y-%m-%d %H:%M:%S UTC')} (first day of current month)")
         print(f"🔗 Channels to process: {len(CHANNEL_URLS)}")
         for name, url in CHANNEL_URLS.items():
             print(f"   • {name}: {url}")
         print()
-        
+
         # Fetch from all channels
-        results = fetch_videos_from_multiple_channels(CHANNEL_URLS, CUTOFF_DATE)
+        results = fetch_videos_from_multiple_channels(CHANNEL_URLS, cutoff_date)
         
         if not any(results.values()):
             print("No videos found matching the criteria from any channel.")

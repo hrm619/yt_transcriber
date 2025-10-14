@@ -19,6 +19,7 @@ yt-transcribe = "yt_transcriber.cli:run_pipeline"
 yt-batch = "yt_transcriber.cli:run_batch"
 yt-fetch-channels = "yt_transcriber.cli:run_channel_fetcher"
 yt-cleanup = "yt_transcriber.cli:run_cleanup"
+yt-update = "yt_transcriber.cli:run_update"
 
 [project.optional-dependencies]
 dev = [

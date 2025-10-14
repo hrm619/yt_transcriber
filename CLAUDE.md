@@ -117,6 +117,11 @@ yt-batch
 yt-fetch-channels
 ```
 
+**Fetch latest videos + batch process (all-in-one):**
+```bash
+yt-update
+```
+
 **Cleanup temporary files:**
 ```bash
 yt-cleanup
@@ -195,14 +200,23 @@ Required in `.env` file:
 
 ## CLI Entry Points
 
-The package defines four console scripts in `pyproject.toml`:
+The package defines five console scripts in `pyproject.toml`:
 
 - `yt-transcribe`: Single video processing
 - `yt-batch`: Batch processing from config/urls.txt
 - `yt-fetch-channels`: Multi-channel YouTube URL fetcher
+- `yt-update`: **All-in-one** - Fetch latest videos and batch process them
 - `yt-cleanup`: Clean up temporary files and empty directories
 
 All entry points are defined in `src/yt_transcriber/cli.py` and installed when you run `uv pip install -e .`
+
+### Recommended Workflow
+
+For most users, the simplest workflow is:
+1. Run `yt-update` once per month to fetch and process all new videos from all channels
+2. Run `yt-cleanup` periodically to clean up temporary files
+
+For more control, you can use the individual commands (`yt-fetch-channels`, `yt-batch`, `yt-transcribe`) separately.
 
 ## Package Management
 

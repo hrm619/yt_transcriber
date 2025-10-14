@@ -89,6 +89,19 @@ yt-fetch-channels
 yt-batch
 ```
 
+### Fetch & Process (All-in-One)
+
+Fetch latest videos from all channels and process them in one command:
+
+```bash
+yt-update
+```
+
+This command:
+1. Fetches videos from all configured channels (since first of current month)
+2. Saves URLs to `config/all_channels_urls.txt`
+3. Automatically runs batch processing on all fetched videos
+
 ### Cleanup Temporary Files
 
 Remove temporary audio chunks and empty directories:
