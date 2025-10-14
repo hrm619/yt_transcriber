@@ -37,9 +37,13 @@ source .venv/bin/activate  # On Unix/macOS
 .venv\Scripts\activate  # On Windows
 ```
 
-3. Install dependencies:
+3. Install the package:
 ```bash
-uv pip install -r requirements.txt
+# Production dependencies only
+uv pip install -e .
+
+# Or with development dependencies (includes pytest, ruff)
+uv pip install -e ".[dev]"
 ```
 
 4. Set up YouTube Data API v3 (for channel video fetching):
@@ -50,74 +54,84 @@ This will guide you through getting and setting up your YouTube API key.
 
 ## Usage
 
+After installation, you can use the CLI commands from anywhere in your terminal.
+
 ### Single Video Processing
 
 ```bash
-python run_pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID"
+yt-transcribe "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
 For private videos, you can use either:
 - Browser cookies:
 ```bash
-python run_pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-from-browser chrome
+yt-transcribe "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-from-browser chrome
 ```
 - Cookies file:
 ```bash
-python run_pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-file path/to/cookies.txt
+yt-transcribe "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-file path/to/cookies.txt
 ```
 
 ### Automated Channel Video Fetching
 
-Fetch recent videos from a YouTube channel (published after January 1, 2025):
+Fetch recent videos from YouTube channels (published after the configured cutoff date):
 
 ```bash
-# Fetch videos and optionally save to config/urls.txt
-python src/yt_transcriber/core/url_update.py
-
-# Or use the demo script
-python scripts/fetch_recent_videos.py
+yt-fetch-channels
 ```
 
 ### Batch Processing
 
-1. Create a `urls.txt` file with YouTube URLs (one per line), or use the automated fetcher above
-2. Optionally create a `prompt.txt` file with your custom GPT prompt
+1. Create a `config/urls.txt` file with YouTube URLs (one per line), or use the automated fetcher above
+2. Optionally create a `config/prompt.txt` file with your custom GPT prompt
 3. Run the batch processor:
 ```bash
-python run_batch.py
+yt-batch
+```
+
+### Cleanup Temporary Files
+
+Remove temporary audio chunks and empty directories:
+
+```bash
+yt-cleanup
 ```
 
 ## Directory Structure
 
-- `app/`: Main application code
+- `src/yt_transcriber/`: Main package
   - `pipeline.py`: Core YouTube → Whisper → GPT pipeline
-  - `batch_processor.py`: Batch processing for multiple videos
+  - `batch.py`: Batch processing for multiple videos
+  - `channels.py`: YouTube channel video fetcher with date filtering
   - `config.py`: Configuration settings
-- `src/yt_transcriber/core/`: Core functionality
-  - `url_update.py`: YouTube channel video fetcher with date filtering
-- `data/`: All data storage
+  - `utils.py`: Utility functions (cleanup, helpers)
+  - `cli.py`: CLI entry points
+- `tests/`: Unit and integration tests
+  - `test_pipeline_and_process.py`: Pipeline and batch tests
+  - `test_url_update.py`: Channel fetching tests
+  - `test_e2e.py`: End-to-end integration tests
+- `config/`: Configuration files
+  - `urls.txt`: Input YouTube URLs for batch processing
+  - `prompt.txt`: GPT prompts
+- `data/`: All data storage (auto-created)
   - `raw/audio/`: Downloaded audio files
   - `raw/temp/`: Temporary chunk files
   - `processed/transcripts/`: Whisper transcripts
   - `processed/summaries/`: GPT-generated summaries
   - `archive/`: Archive and backup data
-- `config/`: Configuration files
-  - `urls.txt`: Input YouTube URLs
-  - `prompt.txt`: GPT prompts
-- `tests/`: Test files
 - `docs/`: Documentation
-- `scripts/`: Utility scripts
-  - `fetch_recent_videos.py`: Demo script for channel video fetching
 - `logs/`: Log files
+- `pyproject.toml`: Package configuration and dependencies
 - `setup_api.py`: YouTube API setup helper
 
 ## Configuration
 
-The main configuration parameters are in `yt_whisper_pipeline.py`:
+The main configuration parameters are in `src/yt_transcriber/config.py`:
 
 - `AUDIO_FORMAT`: Audio format for downloads (default: "m4a")
-- `WHISPER_MODEL`: OpenAI Whisper model to use
-- `GPT_MODEL`: OpenAI GPT model for text generation
+- `WHISPER_MODEL`: OpenAI Whisper model to use (default: "whisper-1")
+- `GPT_MODEL`: OpenAI GPT model for text generation (default: "gpt-4o")
+- Directory paths for data storage
 
 ## Development
 
@@ -125,10 +139,23 @@ This project uses:
 - `ruff` for linting
 - `pytest` for testing
 
-To run tests:
+### Running Tests
+
 ```bash
+# Run all tests
 pytest tests/
+
+# Run specific test file
+pytest tests/test_e2e.py -v
+
+# Run with coverage
+pytest tests/ --cov=yt_transcriber
 ```
+
+The test suite includes:
+- Unit tests for individual components
+- Integration tests for the complete pipeline
+- End-to-end tests for real-world workflows
 
 ## License
 

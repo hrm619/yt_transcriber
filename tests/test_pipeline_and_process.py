@@ -3,12 +3,8 @@ import pytest
 from pathlib import Path
 import sys
 
-import sys
-sys.path.append("app")
-import pipeline
-import sys
-sys.path.append("app")
-import batch_processor as process_videos
+from yt_transcriber import pipeline
+from yt_transcriber import batch as process_videos
 
 # Unit tests for yt_whisper_pipeline
 

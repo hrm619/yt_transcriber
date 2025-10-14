@@ -2,7 +2,7 @@
 """
 YouTube Channel URL Fetcher
 
-This script fetches YouTube video URLs from a channel for videos published after January 1, 2025.
+This script fetches YouTube video URLs from a channel for videos published after a cutoff date.
 It uses the YouTube Data API v3 to get accurate metadata including publish dates.
 
 Requirements:
@@ -11,10 +11,10 @@ Requirements:
 - requests for API calls
 
 Usage:
-    python src/yt_transcriber/core/url_update.py
-    
+    python -m yt_transcriber.channels
+
     # Or import and use as a module:
-    from src.yt_transcriber.core.url_update import fetch_recent_videos
+    from yt_transcriber.channels import fetch_recent_videos
     video_urls = fetch_recent_videos(channel_url, cutoff_date)
 """
 
@@ -31,11 +31,7 @@ try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
-    print("Warning: python-dotenv not installed. Install with: uv add python-dotenv")
-
-# Add project root to path for imports
-project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root))
+    print("Warning: python-dotenv not installed. Install with: uv pip install python-dotenv")
 
 # Channel URLs to fetch from
 CHANNEL_URLS = {

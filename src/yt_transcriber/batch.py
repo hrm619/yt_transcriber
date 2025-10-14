@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-Process multiple YouTube videos using yt_whisper_pipeline.py
+Process multiple YouTube videos using the pipeline.
 This script extracts URLs from a text file and runs each through the pipeline.
 """
 
 import re
 import subprocess
 import sys
-import hashlib
 from pathlib import Path
 
 # Function to extract URLs from text file
@@ -74,9 +73,9 @@ def main():
             
         print(f"Processing video {i}/{len(urls)}: {url} (ID: {video_id})")
         
-        # Build the command to run yt_whisper_pipeline.py
+        # Build the command to run the pipeline
         cmd = [
-            "python", "app/pipeline.py",
+            "python", "-m", "yt_transcriber.pipeline",
             url,
             "--prompt", prompt,
             "--cookies-from-browser", "chrome"  # Change this if needed

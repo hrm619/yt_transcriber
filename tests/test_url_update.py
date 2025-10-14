@@ -9,11 +9,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-
-from src.yt_transcriber.core.url_update import (
+from yt_transcriber.channels import (
     extract_channel_id_from_url,
     YouTubeAPIError,
     get_api_key,
@@ -73,11 +69,11 @@ class TestAPIKey:
 class TestVideoFetching:
     """Test video fetching functionality."""
     
-    @patch('src.yt_transcriber.core.url_update.requests.get')
-    @patch('src.yt_transcriber.core.url_update.get_api_key')
+    @patch('yt_transcriber.channels.requests.get')
+    @patch('yt_transcriber.channels.get_api_key')
     def test_get_channel_videos_success(self, mock_get_api_key, mock_requests_get):
         """Test successful video fetching."""
-        from src.yt_transcriber.core.url_update import get_channel_videos
+        from yt_transcriber.channels import get_channel_videos
         
         # Mock API key
         mock_get_api_key.return_value = 'test_key'
@@ -112,10 +108,10 @@ class TestVideoFetching:
 class TestMultiChannelFetching:
     """Test multi-channel video fetching functionality."""
     
-    @patch('src.yt_transcriber.core.url_update.fetch_recent_videos')
+    @patch('yt_transcriber.channels.fetch_recent_videos')
     def test_fetch_videos_from_multiple_channels(self, mock_fetch_recent_videos):
         """Test fetching videos from multiple channels."""
-        from src.yt_transcriber.core.url_update import fetch_videos_from_multiple_channels
+        from yt_transcriber.channels import fetch_videos_from_multiple_channels
         
         # Mock the single channel fetch function
         def mock_fetch(channel_url, cutoff_date):
