@@ -39,8 +39,6 @@ CHANNEL_URLS = {
     "jj": "https://www.youtube.com/@lateroundff/videos",
     "fpts": "https://www.youtube.com/@FantasyPoints/videos",
     "pff": "https://www.youtube.com/@ProFootballFocus/videos",
-    "ringer_fantasy": "https://www.youtube.com/@RingerFFS/videos",
-    "ringer_nfl": "https://www.youtube.com/@RingerNFL/videos",
     "athletic": "https://www.youtube.com/@TAFootballShow/videos"
 }
 
