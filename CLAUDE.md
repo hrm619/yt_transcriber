@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-YouTube Transcriber is a Python pipeline that downloads YouTube videos, transcribes them using OpenAI's Whisper API, and generates summaries using GPT. The project supports both single-video processing and batch processing of multiple videos from multiple YouTube channels.
+YouTube Transcriber is a Python pipeline that downloads YouTube videos, transcribes them using OpenAI's Whisper API, and generates summaries using GPT. The project supports both single-video processing and batch processing of multiple videos from configurable YouTube channels. It is domain-agnostic and can be used for any topic.
 
 ## Project Structure
 
@@ -22,6 +22,7 @@ yt_transcriber/
 │   ├── test_url_update.py
 │   └── test_e2e.py              # End-to-end integration tests
 ├── config/                      # User configuration files
+│   ├── channels.yaml            # Channel list for multi-channel fetching
 │   ├── urls.txt                 # Input URLs for batch processing
 │   └── prompt.txt               # GPT prompt for summaries
 ├── data/                        # Data storage (auto-created)
@@ -38,36 +39,58 @@ yt_transcriber/
 
 The main pipeline follows this flow:
 
-1. **Download** (`download_audio`): Uses yt-dlp to download audio from YouTube (m4a format)
-   - Implements chunked HTTP range requests for reliable large downloads
-   - Supports private videos via browser cookies or cookie files
-   - Checks for existing files to avoid re-downloading
+1. **Download** (`download_audio`): Orchestrator that checks for existing files, extracts the download URL via yt-dlp, and downloads using HTTP Range requests.
+   - Helper: `_check_existing_audio(video_id)` — returns existing audio path or None
+   - Helper: `_extract_download_url(url)` — uses yt-dlp to get the best audio stream URL
+   - Helper: `_download_in_chunks(download_url, output_path)` — chunked HTTP download with retry
 
-2. **Transcribe** (`transcribe`): Sends audio to OpenAI Whisper API (pipeline.py:218)
-   - Automatically splits files >25MB into 5-minute chunks using ffmpeg
-   - Chunks are stored in `data/raw/temp/` and combined after transcription
-   - Checks for existing transcripts to avoid re-processing
+2. **Transcribe** (`transcribe`): Orchestrator that routes to direct or chunked transcription based on file size.
+   - Helper: `_transcribe_direct(audio_path)` — files under 25MB
+   - Helper: `_transcribe_chunked(audio_path, video_id)` — files over 25MB
+   - Helper: `_split_audio_into_chunks(audio_path, video_id, segment_length)` — ffmpeg splitting
+   - Helper: `_transcribe_chunks(chunk_paths)` — transcribes and joins chunks
 
-3. **Summarize** (`gpt_action`): Processes transcript with GPT (pipeline.py:281)
-   - System prompt configured for NFL scouting/fantasy football analysis
-   - Uses GPT-4o model with temperature=0.3 for consistency
-   - Checks for existing summaries to avoid re-processing
+3. **Summarize** (`gpt_action`): Processes transcript with GPT using a domain-agnostic system prompt. The `user_prompt` parameter controls the analysis direction.
 
 **Important**: Each stage checks for existing output files based on video ID to enable resumable processing.
 
+### Public Integration API
+
+Three functions provide clean programmatic access for external tools:
+
+```python
+from yt_transcriber.pipeline import (
+    get_transcript_text,        # video_id -> str | None (check existing)
+    transcribe_to_text,         # audio_path, video_id -> str (raw text)
+    process_url_to_transcript,  # url -> str (full pipeline, returns text)
+)
+```
+
+These return raw transcript text (not file paths) and do not run GPT summarization.
+
 ### Batch Processing (`src/yt_transcriber/batch.py`)
 
-Processes multiple videos from `config/urls.txt`. Calls the pipeline as a subprocess for each URL with shared prompt from `config/prompt.txt`.
+Processes multiple videos from `config/urls.txt`. Calls pipeline functions directly (not via subprocess). Uses prompt from `config/prompt.txt`.
 
-**Note**: Currently hardcoded to use `--cookies-from-browser chrome` (batch.py:81).
+Cookie authentication is configurable via the `YT_COOKIES_FROM_BROWSER` environment variable (default: None, meaning no cookie auth).
 
 ### Multi-Channel URL Fetcher (`src/yt_transcriber/channels.py`)
 
-Fetches recent videos from multiple YouTube channels using YouTube Data API v3:
-- Channel list defined in `CHANNEL_URLS` dict (channels.py:37-45)
-- Date filtering via `CUTOFF_DATE` (channels.py:57)
+Fetches recent videos from YouTube channels using YouTube Data API v3:
+- Channels loaded from `config/channels.yaml` via `load_channels_from_config()`
+- Date filtering defaults to first day of current month
 - Saves organized output files per channel and a combined file
 - Requires `YOUTUBE_API_KEY` environment variable
+
+### Channel Configuration (`config/channels.yaml`)
+
+```yaml
+channels:
+  - name: "channel_display_name"
+    url: "https://www.youtube.com/@ChannelHandle/videos"
+  - name: "another_channel"
+    url: "https://www.youtube.com/@AnotherHandle/videos"
+```
 
 ## Development Commands
 
@@ -78,19 +101,11 @@ Fetches recent videos from multiple YouTube channels using YouTube Data API v3:
 uv venv
 source .venv/bin/activate  # macOS/Linux
 
-# Install package in editable mode
-uv pip install -e .
-
-# Install with dev dependencies (includes pytest, ruff)
+# Install package in editable mode with dev dependencies
 uv pip install -e ".[dev]"
-
-# Set up YouTube API (interactive)
-python setup_api.py
 ```
 
 ### Running the Pipeline
-
-After installation, you can use the CLI commands from anywhere:
 
 **Single video:**
 ```bash
@@ -127,24 +142,17 @@ yt-update
 yt-cleanup
 ```
 
-**Alternative: Run as Python modules** (if not installed):
-```bash
-python -m yt_transcriber.pipeline "URL"
-python -m yt_transcriber.batch
-python -m yt_transcriber.channels
-```
-
 ### Testing
 
 ```bash
 # Run all tests
-pytest tests/
+.venv/bin/python -m pytest tests/
 
 # Run specific test file
-pytest tests/test_pipeline_and_process.py
+.venv/bin/python -m pytest tests/test_pipeline_and_process.py
 
 # Run with verbose output
-pytest -v tests/
+.venv/bin/python -m pytest -v tests/
 ```
 
 ### Linting
@@ -159,98 +167,64 @@ ruff check .
 - `AUDIO_FORMAT = "m4a"`: Audio format for downloads
 - `WHISPER_MODEL = "whisper-1"`: OpenAI Whisper model
 - `GPT_MODEL = "gpt-4o"`: GPT model for summaries
+- `YT_COOKIES_FROM_BROWSER`: Optional env var for cookie auth in batch mode
 
 **Directory structure** (auto-created on first run):
 - `data/raw/audio/`: Downloaded audio files
 - `data/raw/temp/`: Temporary audio chunks for >25MB files
 - `data/processed/transcripts/`: Whisper transcripts
 - `data/processed/summaries/`: GPT summaries
-- `config/`: URLs and prompts for batch processing
+- `config/`: Channel config, URLs, and prompts
 
 ## Key Implementation Details
 
 ### Video ID Extraction and File Naming
 
-Files are named with pattern: `{timestamp}_{video_id}.{ext}` where timestamp is `YYYYmmdd_HHMMSS` UTC format. This ensures:
-- Unique filenames for the same video processed at different times
-- Easy sorting by processing time
-- Video ID preservation for deduplication checks
+Files are named with pattern: `{timestamp}_{video_id}.{ext}` where timestamp is `YYYYmmdd_HHMMSS` UTC format.
 
 ### Deduplication Logic
 
-All three pipeline stages (`download_audio`, `transcribe`, `gpt_action`) call `check_existing_files(video_id)` which searches for existing files containing the video ID in their filename using glob patterns (pipeline.py:61-88).
+All three pipeline stages check `check_existing_files(video_id)` which searches for existing files containing the video ID using glob patterns.
 
 ### Audio Chunking for Large Files
 
-When audio files exceed 25MB (Whisper API limit), the `transcribe` function:
-1. Uses ffmpeg to split audio into 5-minute segments (pipeline.py:247-252)
-2. Transcribes each chunk separately
-3. Joins transcriptions with spaces (pipeline.py:266)
-4. Chunks are saved to `CHUNKS_DIR` with pattern `{video_id}_chunk{number}.m4a`
-
-### Error Handling for Private Videos
-
-When a private video is detected, the pipeline provides clear instructions about authentication options (pipeline.py:196-207) and suggests cookie-based authentication methods.
+When audio files exceed 25MB (Whisper API limit):
+1. `_split_audio_into_chunks` uses ffmpeg to split into 5-minute segments
+2. `_transcribe_chunks` transcribes each chunk separately
+3. Transcriptions are joined with spaces
 
 ## Environment Variables
 
 Required in `.env` file:
-- `YOUTUBE_API_KEY`: For channel video fetching functionality
-- `OPENAI_API_KEY`: For Whisper and GPT API calls (implicitly required by openai library)
+- `YOUTUBE_API_KEY`: For channel video fetching
+- `OPENAI_API_KEY`: For Whisper and GPT API calls
+
+Optional:
+- `YT_COOKIES_FROM_BROWSER`: Browser name for cookie auth in batch mode (e.g. `chrome`)
 
 ## CLI Entry Points
 
-The package defines five console scripts in `pyproject.toml`:
+Defined in `pyproject.toml` and `src/yt_transcriber/cli.py`:
 
 - `yt-transcribe`: Single video processing
 - `yt-batch`: Batch processing from config/urls.txt
 - `yt-fetch-channels`: Multi-channel YouTube URL fetcher
-- `yt-update`: **All-in-one** - Fetch latest videos and batch process them
-- `yt-cleanup`: Clean up temporary files and empty directories
-
-All entry points are defined in `src/yt_transcriber/cli.py` and installed when you run `uv pip install -e .`
-
-### Recommended Workflow
-
-For most users, the simplest workflow is:
-1. Run `yt-update` once per month to fetch and process all new videos from all channels
-2. Run `yt-cleanup` periodically to clean up temporary files
-
-For more control, you can use the individual commands (`yt-fetch-channels`, `yt-batch`, `yt-transcribe`) separately.
-
-## Package Management
-
-This project uses `uv` for package management with dependencies defined in `pyproject.toml`:
-- Production dependencies are in the main `dependencies` array
-- Development dependencies (pytest, ruff) are in `[project.optional-dependencies]`
-- Install with: `uv pip install -e .` or `uv pip install -e ".[dev]"` for dev dependencies
+- `yt-update`: All-in-one fetch + batch process
+- `yt-cleanup`: Clean up temporary files
 
 ## Module Import Structure
 
-All modules are under the `yt_transcriber` package:
-
 ```python
 from yt_transcriber.pipeline import download_audio, transcribe, gpt_action
+from yt_transcriber.pipeline import get_transcript_text, transcribe_to_text, process_url_to_transcript
 from yt_transcriber.batch import extract_urls_from_file
-from yt_transcriber.channels import fetch_videos_from_multiple_channels, CHANNEL_URLS
+from yt_transcriber.channels import fetch_videos_from_multiple_channels, load_channels_from_config
 from yt_transcriber.config import DOWNLOAD_DIR, WHISPER_MODEL, GPT_MODEL
 from yt_transcriber.utils import cleanup_temp_files, cleanup_all
 ```
 
-## Testing
+## Package Management
 
-The project includes comprehensive unit tests and end-to-end integration tests:
-
-**Unit tests** (`tests/test_pipeline_and_process.py`, `tests/test_url_update.py`):
-- Test individual functions and components
-- Mock external dependencies (APIs, filesystem)
-- Fast execution for quick feedback
-
-**End-to-end tests** (`tests/test_e2e.py`):
-- Test complete workflows (download → transcribe → summarize)
-- Test batch processing with multiple videos
-- Test channel fetching integration
-- Test utility functions
-- Verify file naming patterns and deduplication logic
-
-Run all tests with: `pytest tests/` or `pytest tests/test_e2e.py -v` for verbose output.
+Uses `uv` with dependencies in `pyproject.toml`:
+- Production: requests, python-dotenv, yt-dlp, openai, tqdm, python-dateutil, typing-extensions, pyyaml
+- Dev: pytest, ruff

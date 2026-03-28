@@ -1,53 +1,45 @@
 #!/usr/bin/env python3
 """
-Pipeline: YouTube → audio → Whisper transcript → GPT prompt output
-Author: ChatGPT (April 2025)
+Pipeline: YouTube -> audio -> Whisper transcript -> GPT prompt output
 
 Usage:
   1. For public videos:
-     python yt_whisper_pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID"
-  
+     python -m yt_transcriber.pipeline "https://www.youtube.com/watch?v=VIDEO_ID"
+
   2. For private videos:
      a) Using cookies file:
-        python yt_whisper_pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-file path/to/cookies.txt
-     
+        python -m yt_transcriber.pipeline "URL" --cookies-file path/to/cookies.txt
+
      b) Using browser cookies:
-        python yt_whisper_pipeline.py "https://www.youtube.com/watch?v=VIDEO_ID" --cookies-from-browser chrome
-        
-  Note: To export cookies from your browser, use a browser extension like "Get cookies.txt" 
-  and save the exported cookies to a file.
+        python -m yt_transcriber.pipeline "URL" --cookies-from-browser chrome
 """
 
 import argparse
 import os
-import sys
-import tempfile
 import re
 import subprocess
-from pathlib import Path
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
-import yt_dlp
 import openai
-from tqdm import tqdm
-import requests
-import time
+import yt_dlp
 
+from .config import (
+    AUDIO_FORMAT,
+    CHUNKS_DIR,
+    DOWNLOAD_DIR,
+    GPT_MODEL,
+    SUMMARY_DIR,
+    TRANSCRIPT_DIR,
+    WHISPER_MODEL,
+)
 
-# ---------- Configuration ----------------------------------------------------
-DOWNLOAD_DIR = Path("data/raw/audio")
-TRANSCRIPT_DIR = Path("data/processed/transcripts")
-SUMMARY_DIR = Path("data/processed/summaries")
-CHUNKS_DIR = Path("data/raw/temp")
-
-AUDIO_FORMAT   = "m4a"           # Smaller than mp3, no re‑encoding step needed
-WHISPER_MODEL  = "whisper-1"     # OpenAI's latest English/Multilingual model
-GPT_MODEL      = "gpt-4o"  # More widely available model
-# -----------------------------------------------------------------------------
-
-# Build folders on first run
-for folder in (DOWNLOAD_DIR, TRANSCRIPT_DIR, SUMMARY_DIR, CHUNKS_DIR):
-    folder.mkdir(exist_ok=True)
+DEFAULT_SYSTEM_PROMPT = (
+    "You are an expert at analyzing transcripts and producing clear, structured summaries. "
+    "When asked to summarize, produce concise, structured output. "
+    "Provide specific examples from the transcript to support key points."
+)
 
 
 def extract_video_id(url: str) -> str:
@@ -60,251 +52,233 @@ def extract_video_id(url: str) -> str:
 
 def check_existing_files(video_id: str) -> dict:
     """Check if files for this video ID already exist.
-    
+
     Returns:
         dict: Keys are 'audio', 'transcript', 'summary' with Path values or None
     """
-    results = {
+    results: dict = {
         'audio': None,
         'transcript': None,
-        'summary': None
+        'summary': None,
     }
-    
-    # Check for audio file
+
     audio_files = list(DOWNLOAD_DIR.glob(f"*{video_id}*.{AUDIO_FORMAT}"))
     if audio_files:
         results['audio'] = audio_files[0]
-    
-    # Check for transcript
+
     transcript_files = list(TRANSCRIPT_DIR.glob(f"*{video_id}*.txt"))
     if transcript_files:
         results['transcript'] = transcript_files[0]
-        
-    # Check for summary
+
     summary_files = list(SUMMARY_DIR.glob(f"*{video_id}*_gpt.txt"))
     if summary_files:
         results['summary'] = summary_files[0]
-        
+
     return results
 
 
-def download_audio(url: str, cookies_from_browser=None, cookies_file=None) -> Path:
-    """
-    Download audio with yt‑dlp (high‑performance settings).
-    
-    Args:
-        url: YouTube video URL
-        cookies_from_browser: Browser from which to read cookies (e.g., 'chrome')
-        cookies_file: Path to a cookies file from a logged-in YouTube account
-        
-    Returns:
-        Path to the downloaded audio file
-        
-    Raises:
-        Exception: If the download fails or the video is private and requires authentication
-    """
-    video_id = extract_video_id(url)
-    
-    # Check for existing files
-    existing_files = check_existing_files(video_id)
-    if existing_files['audio']:
-        print(f"Found existing audio file: {existing_files['audio']}")
-        return existing_files['audio']
-    
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    outfile   = DOWNLOAD_DIR / f"{timestamp}_{video_id}.%(ext)s"
+# ---------------------------------------------------------------------------
+# Download helpers
+# ---------------------------------------------------------------------------
 
-    ydl_opts = {
-        # Grab only the best audio (no video) in desired container
+def _check_existing_audio(video_id: str) -> Path | None:
+    """Return existing audio path for video_id, or None."""
+    existing = check_existing_files(video_id)
+    return existing['audio']
+
+
+def _build_ydl_opts(
+    output_template: str,
+    cookies_from_browser: str | None = None,
+    cookies_file: str | None = None,
+) -> dict:
+    """Build yt-dlp options dict for audio download."""
+    opts: dict = {
         "format": f"bestaudio[ext={AUDIO_FORMAT}]/bestaudio/best",
-        # Write directly, don't re‑mux unless absolutely required
         "postprocessors": [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": AUDIO_FORMAT,
-            "preferredquality": "0",  # best
+            "preferredquality": "0",
         }],
-        "outtmpl": str(outfile),
-        # Speed tweaks
+        "outtmpl": output_template,
         "concurrent_fragment_downloads": 4,
         "quiet": True,
         "no_warnings": True,
-        # Progress hook for tqdm
-        "progress_hooks": [lambda d: _tqdm_hook(d)],
     }
-
     if cookies_file:
-        if not os.path.exists(cookies_file):
-            raise FileNotFoundError(f"Cookies file not found: {cookies_file}")
-        ydl_opts["cookiefile"] = cookies_file
-        print(f"Using cookies from file: {cookies_file}")
-
+        opts["cookiefile"] = cookies_file
     if cookies_from_browser:
-        ydl_opts["cookiesfrombrowser"] = (cookies_from_browser,)
-        print(f"Using cookies from browser: {cookies_from_browser}")
+        opts["cookiesfrombrowser"] = (cookies_from_browser,)
+    return opts
 
-    global _pbar
-    _pbar = tqdm(unit="B", unit_scale=True, desc="Download")
+
+def download_audio(
+    url: str,
+    cookies_from_browser: str | None = None,
+    cookies_file: str | None = None,
+) -> Path:
+    """Download audio from a YouTube URL using yt-dlp.
+
+    Args:
+        url: YouTube video URL
+        cookies_from_browser: Browser name for cookie auth (e.g. 'chrome')
+        cookies_file: Path to a Netscape-format cookies file
+
+    Returns:
+        Path to the downloaded audio file
+
+    Raises:
+        FileNotFoundError: If cookies_file does not exist
+        Exception: If download fails or video is private
+    """
+    video_id = extract_video_id(url)
+
+    existing = _check_existing_audio(video_id)
+    if existing:
+        print(f"Found existing audio file: {existing}")
+        return existing
+
+    if cookies_file and not os.path.exists(cookies_file):
+        raise FileNotFoundError(f"Cookies file not found: {cookies_file}")
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    out_template = str(DOWNLOAD_DIR / f"{timestamp}_{video_id}.%(ext)s")
+
+    opts = _build_ydl_opts(out_template, cookies_from_browser, cookies_file)
 
     try:
-        # Manual chunked download with HTTP Range headers
-        with yt_dlp.YoutubeDL({"format": f"bestaudio[ext={AUDIO_FORMAT}]/bestaudio/best", "quiet": True}) as extractor:
-            info = extractor.extract_info(url, download=False)
-        formats = info.get("formats", [])
-        best_formats = [f for f in formats if f.get("ext") == AUDIO_FORMAT and f.get("acodec") != "none"]
-        if best_formats:
-            best = max(best_formats, key=lambda f: f.get("abr") or 0)
-            download_url = best.get("url")
-        else:
-            download_url = info.get("url")
-
-        tmp_path = DOWNLOAD_DIR / f"{timestamp}_{video_id}.tmp"
-        session = requests.Session()
-        chunk_size = 256 * 1024  # 256 KB
-        start = 0
-        total = None
-        while True:
-            end = start + chunk_size - 1
-            headers = {"Range": f"bytes={start}-{end}"}
-            retries = 0
-            while True:
-                try:
-                    resp = session.get(download_url, headers=headers, stream=True, timeout=10)
-                    if resp.status_code not in (200, 206):
-                        raise Exception(f"Unexpected status code {resp.status_code}")
-                    break
-                except Exception:
-                    retries += 1
-                    if retries > 3:
-                        raise
-                    time.sleep(2 ** retries)
-            if resp.status_code == 206:
-                content_range = resp.headers.get("Content-Range")
-                if content_range:
-                    total = int(content_range.split("/")[-1])
-            with open(tmp_path, "ab") as f:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-            if total is None or end >= total - 1:
-                break
-            start = end + 1
-
-        final_path = DOWNLOAD_DIR / f"{timestamp}_{video_id}.{AUDIO_FORMAT}"
-        tmp_path.rename(final_path)
-        return final_path
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.download([url])
     except yt_dlp.utils.DownloadError as e:
         if "Private video" in str(e):
             error_msg = (
                 "Error: This video is private and requires authentication.\n"
                 "Please try one of the following methods:\n"
-                "1. Export cookies from your browser using an extension like 'Get cookies.txt' "
-                "and use the --cookies-file option.\n"
-                "2. Use the --cookies-from-browser option to use cookies directly from your browser.\n"
-                "Example: --cookies-from-browser chrome\n"
-                "Note: Make sure you are logged into the YouTube account that has access to this video."
+                "1. Use --cookies-file with an exported cookies.txt file.\n"
+                "2. Use --cookies-from-browser (e.g. chrome).\n"
+                "Make sure you are logged into YouTube."
             )
             raise Exception(error_msg) from e
         raise
 
-    _pbar.close()
+    # Find the downloaded file (extension may vary after post-processing)
+    matches = list(DOWNLOAD_DIR.glob(f"{timestamp}_{video_id}.*"))
+    matches = [m for m in matches if not m.suffix == ".tmp"]
+    if not matches:
+        raise FileNotFoundError(f"Download completed but output file not found for {video_id}")
+    return matches[0]
 
 
-def _tqdm_hook(d):
-    if d["status"] == "downloading":
-        _pbar.total = d.get("total_bytes") or d.get("total_bytes_estimate")
-        _pbar.update(d.get("downloaded_bytes", 0) - _pbar.n)
+# ---------------------------------------------------------------------------
+# Transcription helpers
+# ---------------------------------------------------------------------------
+
+def _split_audio_into_chunks(
+    audio_path: Path, video_id: str, segment_length: int = 300
+) -> list[Path]:
+    """Split audio into fixed-length chunks using ffmpeg."""
+    chunk_base = CHUNKS_DIR / f"{video_id}_chunk"
+
+    for old_chunk in CHUNKS_DIR.glob(f"{video_id}_chunk*"):
+        old_chunk.unlink()
+
+    cmd = [
+        "ffmpeg", "-i", str(audio_path), "-f", "segment",
+        "-segment_time", str(segment_length), "-c", "copy",
+        f"{chunk_base}%03d.{AUDIO_FORMAT}",
+    ]
+    subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    return sorted(CHUNKS_DIR.glob(f"{video_id}_chunk*.{AUDIO_FORMAT}"))
 
 
-def transcribe(audio_path: Path, video_id: str = None) -> Path:
-    """Transcribe with Whisper via the OpenAI API."""
-    # Extract video_id from audio filename if not provided
-    if not video_id:
-        video_id = audio_path.stem.split('_')[-1]
-    
-    # Check for existing transcript
-    existing_files = check_existing_files(video_id)
-    if existing_files['transcript']:
-        print(f"Found existing transcript: {existing_files['transcript']}")
-        return existing_files['transcript']
-    
-    # Get file size and determine if we need to split it
-    file_size = audio_path.stat().st_size
-    max_size = 25 * 1024 * 1024  # 25MB, Whisper API limit
-    
-    if file_size > max_size:
-        print(f"Audio file size ({file_size/1024/1024:.2f}MB) exceeds API limit, splitting...")
-        # Use ffmpeg to split the audio file into 5-minute chunks
-        segment_length = 300  # 5 minutes in seconds
-        
-        transcriptions = []
-        chunk_base = CHUNKS_DIR / f"{video_id}_chunk"
-        
-        # Remove any existing chunks
-        for old_chunk in CHUNKS_DIR.glob(f"{video_id}_chunk*"):
-            old_chunk.unlink()
-        
-        # Split the audio using ffmpeg
-        cmd = [
-            "ffmpeg", "-i", str(audio_path), "-f", "segment", 
-            "-segment_time", str(segment_length), "-c", "copy",
-            f"{chunk_base}%03d.{AUDIO_FORMAT}"
-        ]
-        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        
-        # Transcribe each chunk
-        for chunk_file in sorted(CHUNKS_DIR.glob(f"{video_id}_chunk*.{AUDIO_FORMAT}")):
-            print(f"Transcribing chunk: {chunk_file.name}")
-            with open(chunk_file, "rb") as af:
-                transcription = openai.audio.transcriptions.create(
-                    model=WHISPER_MODEL,
-                    file=af,
-                    response_format="text",
-                )
-                transcriptions.append(transcription)
-        
-        # Combine all transcriptions
-        full_transcription = " ".join(transcriptions)
-    else:
-        print(f"Audio file size ({file_size/1024/1024:.2f}MB) within API limits, transcribing directly...")
-        with open(audio_path, "rb") as af:
-            full_transcription = openai.audio.transcriptions.create(
+def _transcribe_chunks(chunk_paths: list[Path]) -> str:
+    """Transcribe a list of audio chunks and join the results."""
+    transcriptions: list[str] = []
+    for chunk_file in chunk_paths:
+        print(f"Transcribing chunk: {chunk_file.name}")
+        with open(chunk_file, "rb") as af:
+            text = openai.audio.transcriptions.create(
                 model=WHISPER_MODEL,
                 file=af,
                 response_format="text",
             )
+            transcriptions.append(text)
+    return " ".join(transcriptions)
+
+
+def _transcribe_direct(audio_path: Path) -> str:
+    """Transcribe an audio file that fits within the Whisper API size limit."""
+    with open(audio_path, "rb") as af:
+        return openai.audio.transcriptions.create(
+            model=WHISPER_MODEL,
+            file=af,
+            response_format="text",
+        )
+
+
+def _transcribe_chunked(audio_path: Path, video_id: str) -> str:
+    """Transcribe a large audio file by splitting into chunks first."""
+    chunk_paths = _split_audio_into_chunks(audio_path, video_id)
+    return _transcribe_chunks(chunk_paths)
+
+
+def transcribe(audio_path: Path, video_id: str | None = None) -> Path:
+    """Transcribe audio with Whisper and save to disk.
+
+    Returns:
+        Path to the transcript file
+    """
+    if not video_id:
+        video_id = audio_path.stem.split('_')[-1]
+
+    existing = check_existing_files(video_id)
+    if existing['transcript']:
+        print(f"Found existing transcript: {existing['transcript']}")
+        return existing['transcript']
+
+    file_size = audio_path.stat().st_size
+    max_size = 25 * 1024 * 1024  # 25MB
+
+    if file_size > max_size:
+        print(f"Audio file size ({file_size / 1024 / 1024:.2f}MB) exceeds API limit, splitting...")
+        full_transcription = _transcribe_chunked(audio_path, video_id)
+    else:
+        size_mb = file_size / 1024 / 1024
+        print(f"Audio file size ({size_mb:.2f}MB) within API limits, transcribing directly...")
+        full_transcription = _transcribe_direct(audio_path)
 
     out_file = TRANSCRIPT_DIR / f"{audio_path.stem}_{video_id}.txt"
     out_file.write_text(full_transcription)
     return out_file
 
 
-def gpt_action(transcript_path: Path, user_prompt: str, video_id: str = None) -> Path:
-    """Run an arbitrary GPT prompt on the transcript."""
-    # Extract video_id from transcript filename if not provided
+# ---------------------------------------------------------------------------
+# GPT summarization
+# ---------------------------------------------------------------------------
+
+def gpt_action(
+    transcript_path: Path,
+    user_prompt: str,
+    video_id: str | None = None,
+) -> Path:
+    """Run a GPT prompt on a transcript and save the result."""
     if not video_id:
         parts = transcript_path.stem.split('_')
         video_id = parts[-1] if len(parts) > 0 else transcript_path.stem
-    
-    # Check for existing summary
-    existing_files = check_existing_files(video_id)
-    if existing_files['summary']:
-        print(f"Found existing summary: {existing_files['summary']}")
-        return existing_files['summary']
-    
-    # System instructions encourage the model to behave deterministically
-    system_prompt = (
-        "You are an expert in translating transcripts to clear summaries."
-        "You are an NFL scouting expert, with a focus on fantasy impact."
-        "When asked to summarize, produce concise, structured bullet points. Provide examples when possible to back up points."
-    )
+
+    existing = check_existing_files(video_id)
+    if existing['summary']:
+        print(f"Found existing summary: {existing['summary']}")
+        return existing['summary']
 
     transcript_text = transcript_path.read_text()
 
     response = openai.chat.completions.create(
         model=GPT_MODEL,
         messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user",   "content": user_prompt},
+            {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
             {"role": "assistant", "content": transcript_text},
         ],
         temperature=0.3,
@@ -316,19 +290,64 @@ def gpt_action(transcript_path: Path, user_prompt: str, video_id: str = None) ->
     return out_file
 
 
-def main():
+# ---------------------------------------------------------------------------
+# Integration API
+# ---------------------------------------------------------------------------
+
+def get_transcript_text(video_id: str) -> str | None:
+    """Return raw transcript text for a video ID if it exists on disk, else None."""
+    existing = check_existing_files(video_id)
+    if existing['transcript']:
+        return existing['transcript'].read_text()
+    return None
+
+
+def transcribe_to_text(audio_path: Path, video_id: str) -> str:
+    """Transcribe audio and return raw transcript text (not a file path)."""
+    file_size = audio_path.stat().st_size
+    max_size = 25 * 1024 * 1024
+
+    if file_size > max_size:
+        return _transcribe_chunked(audio_path, video_id)
+    return _transcribe_direct(audio_path)
+
+
+def process_url_to_transcript(
+    url: str,
+    cookies_from_browser: str | None = None,
+    cookies_file: str | None = None,
+) -> str:
+    """Full pipeline: download audio from URL and return raw transcript text.
+
+    Does not run GPT summarization. Returns transcript text directly.
+    """
+    video_id = extract_video_id(url)
+
+    existing_text = get_transcript_text(video_id)
+    if existing_text is not None:
+        return existing_text
+
+    audio = download_audio(url, cookies_from_browser, cookies_file)
+    return transcribe_to_text(audio, video_id)
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    """CLI entry point for single-video processing."""
     parser = argparse.ArgumentParser(
-        description="YouTube ➜ Whisper ➜ GPT pipeline",
+        description="YouTube -> Whisper -> GPT pipeline",
         epilog=(
-            "For private videos, you need to provide cookies for authentication.\n"
+            "For private videos, provide cookies for authentication.\n"
             "Use either --cookies-file or --cookies-from-browser option."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("url", help="YouTube video URL")
     parser.add_argument(
-        "--prompt",
-        "-p",
+        "--prompt", "-p",
         default="Summarize the transcript in 3 key takeaways.",
         help="Prompt to apply to the transcript with GPT",
     )
@@ -336,51 +355,53 @@ def main():
         "--cookies-from-browser",
         help="Browser from which to read cookies (e.g. 'chrome', 'firefox', 'safari')",
         choices=["chrome", "firefox", "edge", "safari", "opera"],
-        required=False
+        required=False,
     )
     parser.add_argument(
         "--cookies-file",
         help="Path to a cookies file from a logged-in YouTube account",
-        required=False
+        required=False,
     )
     args = parser.parse_args()
 
     try:
         video_id = extract_video_id(args.url)
-        
-        # Check for existing files
+
         existing_files = check_existing_files(video_id)
-        
         if existing_files['audio'] and existing_files['transcript'] and existing_files['summary']:
             print(f"Video {video_id} has already been fully processed.")
             print(f"Audio: {existing_files['audio']}")
             print(f"Transcript: {existing_files['transcript']}")
             print(f"Summary: {existing_files['summary']}")
             return
-        
+
         audio = download_audio(
             args.url,
             cookies_from_browser=args.cookies_from_browser,
-            cookies_file=args.cookies_file
+            cookies_file=args.cookies_file,
         )
-        print(f"Audio saved → {audio}")
+        print(f"Audio saved -> {audio}")
 
         transcript = transcribe(audio, video_id)
-        print(f"Transcript saved → {transcript}")
+        print(f"Transcript saved -> {transcript}")
 
         gpt_output = gpt_action(transcript, args.prompt, video_id)
-        print(f"GPT output saved → {gpt_output}")
+        print(f"GPT output saved -> {gpt_output}")
 
-        print("\n✅  Pipeline finished successfully.")
+        print("\nPipeline finished successfully.")
     except FileNotFoundError as e:
-        print(f"❌  Error: {e}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
-        print(f"❌  Error: {e}", file=sys.stderr)
-        # If the error is about a private video and no cookies were provided, 
-        # suggest using cookies
-        if "private video" in str(e).lower() and not (args.cookies_file or args.cookies_from_browser):
-            print("\nTip: This appears to be a private video. Try using --cookies-file or --cookies-from-browser option.", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
+        is_private = "private video" in str(e).lower()
+        no_cookies = not (args.cookies_file or args.cookies_from_browser)
+        if is_private and no_cookies:
+            print(
+                "\nTip: This appears to be a private video. "
+                "Try --cookies-file or --cookies-from-browser.",
+                file=sys.stderr,
+            )
         sys.exit(1)
 
 
