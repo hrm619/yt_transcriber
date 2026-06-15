@@ -20,7 +20,7 @@ def cleanup_temp_files():
     return 0
 
 
-def cleanup_empty_dirs(base_dir: Path = None):
+def cleanup_empty_dirs(base_dir: Path | None = None) -> int:
     """
     Remove empty directories recursively.
 

@@ -19,10 +19,10 @@ from .pipeline import (
 
 def extract_urls_from_file(file_path: str) -> list[str]:
     """Extract unique YouTube URLs from a text file, preserving order."""
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    url_pattern = r'https://www\.youtube\.com/watch\?v=[a-zA-Z0-9_-]+'
+    url_pattern = r"https://www\.youtube\.com/watch\?v=[a-zA-Z0-9_-]+"
     urls = re.findall(url_pattern, content)
 
     unique_urls: list[str] = []
@@ -37,7 +37,7 @@ def extract_urls_from_file(file_path: str) -> list[str]:
 
 def read_prompt_from_file(file_path: str) -> str:
     """Read a GPT prompt from a text file."""
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         return f.read().strip()
 
 

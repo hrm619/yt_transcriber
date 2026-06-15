@@ -9,18 +9,21 @@ import sys
 def run_pipeline() -> None:
     """Entry point for single video processing."""
     from yt_transcriber.pipeline import main
+
     main()
 
 
 def run_batch() -> None:
     """Entry point for batch video processing."""
     from yt_transcriber.batch import main
+
     main()
 
 
 def run_channel_fetcher() -> None:
     """Entry point for YouTube channel URL fetcher."""
     from yt_transcriber.channels import main
+
     main()
 
 

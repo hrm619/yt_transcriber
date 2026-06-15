@@ -1,11 +1,12 @@
 # YouTube Transcriber
 
-A powerful Python pipeline for downloading YouTube videos, transcribing them using OpenAI's Whisper, and generating summaries or other text-based outputs using GPT.
+A powerful Python pipeline for transcribing YouTube videos and generating summaries or other text-based outputs using GPT. It prefers YouTube captions when available (fast, free) and falls back to downloading audio and transcribing with OpenAI's Whisper only when a video has none.
 
 ## Features
 
+- **Caption-first transcripts**: fetch YouTube subtitles when available (no audio download, no Whisper cost), falling back to audio + Whisper automatically
 - Download audio from YouTube videos (public or private)
-- Transcribe audio using OpenAI's Whisper model
+- Transcribe audio using OpenAI's Whisper model when captions are unavailable
 - Generate summaries or custom outputs using GPT
 - Support for batch processing multiple videos
 - Handles private videos using browser cookies
@@ -113,7 +114,7 @@ yt-cleanup
 ## Directory Structure
 
 - `src/yt_transcriber/`: Main package
-  - `pipeline.py`: Core YouTube → Whisper → GPT pipeline
+  - `pipeline.py`: Core YouTube → captions/Whisper → GPT pipeline
   - `batch.py`: Batch processing for multiple videos
   - `channels.py`: YouTube channel video fetcher with date filtering
   - `config.py`: Configuration settings

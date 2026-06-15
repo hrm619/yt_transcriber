@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package with dev dependencies
+        # setup-uv provisions Python + the virtual environment; the dev extra
+        # pulls in ruff, ty, and pytest.
+        run: uv pip install -e ".[dev]"
+
+      # ruff lint — gates prod and tests
+      - name: Lint prod (ruff)
+        run: uv run ruff check src/
+      - name: Lint tests (ruff)
+        run: uv run ruff check tests/
+
+      # ruff format — gates prod and tests
+      - name: Format check prod (ruff format)
+        run: uv run ruff format --check src/
+      - name: Format check tests (ruff format)
+        run: uv run ruff format --check tests/
+
+      # ty type check — gates prod and tests
+      - name: Type check prod (ty)
+        run: uv run ty check src/
+      - name: Type check tests (ty)
+        run: uv run ty check tests/
+
+      # pytest — exercises prod code through the test suite
+      - name: Test (pytest)
+        run: uv run pytest
