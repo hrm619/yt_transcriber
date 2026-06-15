@@ -29,9 +29,9 @@ def test_check_existing_files(tmp_path, monkeypatch):
     tr.mkdir()
     su = tmp_path / "summaries"
     su.mkdir()
-    monkeypatch.setattr(pipeline, 'DOWNLOAD_DIR', dl)
-    monkeypatch.setattr(pipeline, 'TRANSCRIPT_DIR', tr)
-    monkeypatch.setattr(pipeline, 'SUMMARY_DIR', su)
+    monkeypatch.setattr(pipeline, "DOWNLOAD_DIR", dl)
+    monkeypatch.setattr(pipeline, "TRANSCRIPT_DIR", tr)
+    monkeypatch.setattr(pipeline, "SUMMARY_DIR", su)
 
     audio_file = dl / "20230101_testid.m4a"
     audio_file.write_text("audio")
@@ -41,9 +41,9 @@ def test_check_existing_files(tmp_path, monkeypatch):
     summary_file.write_text("summary")
 
     results = pipeline.check_existing_files("testid")
-    assert results['audio'] == audio_file
-    assert results['transcript'] == transcript_file
-    assert results['summary'] == summary_file
+    assert results["audio"] == audio_file
+    assert results["transcript"] == transcript_file
+    assert results["summary"] == summary_file
 
 
 # --- Mocks for download_audio ---
@@ -74,7 +74,7 @@ class DummyYDL:
 def test_download_audio_existing(tmp_path, monkeypatch):
     dl = tmp_path / "downloads"
     dl.mkdir()
-    monkeypatch.setattr(pipeline, 'DOWNLOAD_DIR', dl)
+    monkeypatch.setattr(pipeline, "DOWNLOAD_DIR", dl)
     existing = dl / "20230101_testid.m4a"
     existing.write_bytes(b"existing")
     result = pipeline.download_audio("https://www.youtube.com/watch?v=testid")
@@ -84,8 +84,8 @@ def test_download_audio_existing(tmp_path, monkeypatch):
 def test_download_audio_new(tmp_path, monkeypatch):
     dl = tmp_path / "downloads"
     dl.mkdir()
-    monkeypatch.setattr(pipeline, 'DOWNLOAD_DIR', dl)
-    monkeypatch.setattr(pipeline.yt_dlp, 'YoutubeDL', DummyYDL)
+    monkeypatch.setattr(pipeline, "DOWNLOAD_DIR", dl)
+    monkeypatch.setattr(pipeline.yt_dlp, "YoutubeDL", DummyYDL)
 
     result = pipeline.download_audio("https://www.youtube.com/watch?v=testid")
     assert result.exists()
@@ -121,18 +121,19 @@ def test_read_prompt_from_file(tmp_path):
 
 
 def test_transcribe_new(tmp_path, monkeypatch):
-    monkeypatch.setattr(pipeline, 'TRANSCRIPT_DIR', tmp_path)
+    monkeypatch.setattr(pipeline, "TRANSCRIPT_DIR", tmp_path)
     audio_file = tmp_path / "prefix_testid.m4a"
     audio_file.write_bytes(b"dummy")
     monkeypatch.setattr(
-        pipeline, 'check_existing_files',
-        lambda vid: {'audio': None, 'transcript': None, 'summary': None},
+        pipeline,
+        "check_existing_files",
+        lambda vid: {"audio": None, "transcript": None, "summary": None},
     )
 
     def fake_create(model, file, response_format):
         return "TRANSCRIPT RESULT"
 
-    monkeypatch.setattr(pipeline.openai.audio.transcriptions, 'create', fake_create)
+    monkeypatch.setattr(pipeline.openai.audio.transcriptions, "create", fake_create)
     result = pipeline.transcribe(audio_file, "testid")
     assert result.exists()
     assert result.name.endswith("_testid.txt")
@@ -140,12 +141,13 @@ def test_transcribe_new(tmp_path, monkeypatch):
 
 
 def test_transcribe_existing(tmp_path, monkeypatch):
-    monkeypatch.setattr(pipeline, 'TRANSCRIPT_DIR', tmp_path)
+    monkeypatch.setattr(pipeline, "TRANSCRIPT_DIR", tmp_path)
     existing = tmp_path / "any_testid.txt"
     existing.write_text("text")
     monkeypatch.setattr(
-        pipeline, 'check_existing_files',
-        lambda vid: {'audio': None, 'transcript': existing, 'summary': None},
+        pipeline,
+        "check_existing_files",
+        lambda vid: {"audio": None, "transcript": existing, "summary": None},
     )
     result = pipeline.transcribe(Path("whatever"), "testid")
     assert result == existing
@@ -155,12 +157,13 @@ def test_transcribe_existing(tmp_path, monkeypatch):
 
 
 def test_gpt_action_new(tmp_path, monkeypatch):
-    monkeypatch.setattr(pipeline, 'SUMMARY_DIR', tmp_path)
+    monkeypatch.setattr(pipeline, "SUMMARY_DIR", tmp_path)
     transcript = tmp_path / "prefix_testid.txt"
     transcript.write_text("TRANSCRIPT")
     monkeypatch.setattr(
-        pipeline, 'check_existing_files',
-        lambda vid: {'audio': None, 'transcript': None, 'summary': None},
+        pipeline,
+        "check_existing_files",
+        lambda vid: {"audio": None, "transcript": None, "summary": None},
     )
 
     class DummyMessage:
@@ -178,19 +181,20 @@ def test_gpt_action_new(tmp_path, monkeypatch):
     def fake_chat_create(model, messages, temperature):
         return DummyResponse()
 
-    monkeypatch.setattr(pipeline.openai.chat.completions, 'create', fake_chat_create)
+    monkeypatch.setattr(pipeline.openai.chat.completions, "create", fake_chat_create)
     result = pipeline.gpt_action(transcript, "prompt", "testid")
     assert result.exists()
     assert result.read_text() == "SUMMARY RESULT"
 
 
 def test_gpt_action_existing(tmp_path, monkeypatch):
-    monkeypatch.setattr(pipeline, 'SUMMARY_DIR', tmp_path)
+    monkeypatch.setattr(pipeline, "SUMMARY_DIR", tmp_path)
     existing = tmp_path / "prefix_testid_gpt.txt"
     existing.write_text("prev")
     monkeypatch.setattr(
-        pipeline, 'check_existing_files',
-        lambda vid: {'audio': None, 'transcript': None, 'summary': existing},
+        pipeline,
+        "check_existing_files",
+        lambda vid: {"audio": None, "transcript": None, "summary": existing},
     )
     result = pipeline.gpt_action(Path("dummy"), "prompt", "testid")
     assert result == existing
@@ -201,12 +205,13 @@ def test_gpt_action_existing(tmp_path, monkeypatch):
 
 def test_gpt_action_no_domain_references(tmp_path, monkeypatch):
     """Confirm gpt_action system prompt contains no NFL/fantasy references."""
-    monkeypatch.setattr(pipeline, 'SUMMARY_DIR', tmp_path)
+    monkeypatch.setattr(pipeline, "SUMMARY_DIR", tmp_path)
     transcript = tmp_path / "prefix_testid.txt"
     transcript.write_text("TRANSCRIPT")
     monkeypatch.setattr(
-        pipeline, 'check_existing_files',
-        lambda vid: {'audio': None, 'transcript': None, 'summary': None},
+        pipeline,
+        "check_existing_files",
+        lambda vid: {"audio": None, "transcript": None, "summary": None},
     )
 
     captured_messages = []
@@ -227,7 +232,7 @@ def test_gpt_action_no_domain_references(tmp_path, monkeypatch):
         captured_messages.extend(messages)
         return DummyResponse()
 
-    monkeypatch.setattr(pipeline.openai.chat.completions, 'create', fake_chat_create)
+    monkeypatch.setattr(pipeline.openai.chat.completions, "create", fake_chat_create)
     pipeline.gpt_action(transcript, "prompt", "testid")
 
     system_content = captured_messages[0]["content"].lower()
@@ -248,12 +253,13 @@ def test_main_skips_processed(monkeypatch, tmp_path, capsys):
     summary = tmp_path / "audio_testid_testid_gpt.txt"
     summary.write_text("s")
 
-    monkeypatch.setattr(pipeline, 'extract_video_id', lambda url: "testid")
+    monkeypatch.setattr(pipeline, "extract_video_id", lambda url: "testid")
     monkeypatch.setattr(
-        pipeline, 'check_existing_files',
-        lambda vid: {'audio': audio, 'transcript': transcript, 'summary': summary},
+        pipeline,
+        "check_existing_files",
+        lambda vid: {"audio": audio, "transcript": transcript, "summary": summary},
     )
-    monkeypatch.setattr(sys, 'argv', ["prog", "https://www.youtube.com/watch?v=testid"])
+    monkeypatch.setattr(sys, "argv", ["prog", "https://www.youtube.com/watch?v=testid"])
     pipeline.main()
     captured = capsys.readouterr()
     assert "has already been fully processed" in captured.out
@@ -265,5 +271,6 @@ def test_main_skips_processed(monkeypatch, tmp_path, capsys):
 def test_batch_no_subprocess():
     """Confirm batch.py does not use subprocess to call the pipeline."""
     import inspect
+
     source = inspect.getsource(process_videos)
     assert "subprocess" not in source

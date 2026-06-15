@@ -32,6 +32,7 @@ from .config import CONFIG_DIR
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -41,6 +42,7 @@ CHANNELS_CONFIG_PATH = CONFIG_DIR / "channels.yaml"
 
 class YouTubeAPIError(Exception):
     """Custom exception for YouTube API errors."""
+
     pass
 
 
@@ -97,7 +99,7 @@ def get_api_key() -> str:
     Raises:
         YouTubeAPIError: If API key is not set.
     """
-    api_key = os.getenv('YOUTUBE_API_KEY')
+    api_key = os.getenv("YOUTUBE_API_KEY")
     if not api_key:
         raise YouTubeAPIError(
             "YouTube API key not found. Set YOUTUBE_API_KEY in your environment.\n"
@@ -109,10 +111,10 @@ def get_api_key() -> str:
 def extract_channel_id_from_url(channel_url: str) -> Optional[str]:
     """Extract channel identifier from a YouTube channel URL."""
     patterns = [
-        r'youtube\.com/channel/([a-zA-Z0-9_-]+)',
-        r'youtube\.com/c/([a-zA-Z0-9_-]+)',
-        r'youtube\.com/user/([a-zA-Z0-9_-]+)',
-        r'youtube\.com/@([a-zA-Z0-9_-]+)',
+        r"youtube\.com/channel/([a-zA-Z0-9_-]+)",
+        r"youtube\.com/c/([a-zA-Z0-9_-]+)",
+        r"youtube\.com/user/([a-zA-Z0-9_-]+)",
+        r"youtube\.com/@([a-zA-Z0-9_-]+)",
     ]
     for pattern in patterns:
         match = re.search(pattern, channel_url)
@@ -125,26 +127,24 @@ def get_channel_id_from_handle(api_key: str, handle: str) -> Optional[str]:
     """Resolve a channel handle to a channel ID via the YouTube API."""
     url = "https://www.googleapis.com/youtube/v3/search"
     params = {
-        'part': 'snippet',
-        'type': 'channel',
-        'q': handle,
-        'key': api_key,
-        'maxResults': 1,
+        "part": "snippet",
+        "type": "channel",
+        "q": handle,
+        "key": api_key,
+        "maxResults": 1,
     }
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
-        if data.get('items'):
-            return data['items'][0]['snippet']['channelId']
+        if data.get("items"):
+            return data["items"][0]["snippet"]["channelId"]
     except requests.RequestException as e:
         print(f"Error searching for channel: {e}")
     return None
 
 
-def get_channel_videos(
-    api_key: str, channel_id: str, published_after: datetime
-) -> list[dict]:
+def get_channel_videos(api_key: str, channel_id: str, published_after: datetime) -> list[dict]:
     """Fetch videos from a channel published after a given date.
 
     Raises:
@@ -152,40 +152,42 @@ def get_channel_videos(
     """
     videos: list[dict] = []
     next_page_token = None
-    published_after_str = published_after.strftime('%Y-%m-%dT%H:%M:%SZ')
+    published_after_str = published_after.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     while True:
         url = "https://www.googleapis.com/youtube/v3/search"
         params: dict = {
-            'part': 'snippet',
-            'channelId': channel_id,
-            'type': 'video',
-            'order': 'date',
-            'publishedAfter': published_after_str,
-            'maxResults': 50,
-            'key': api_key,
+            "part": "snippet",
+            "channelId": channel_id,
+            "type": "video",
+            "order": "date",
+            "publishedAfter": published_after_str,
+            "maxResults": 50,
+            "key": api_key,
         }
         if next_page_token:
-            params['pageToken'] = next_page_token
+            params["pageToken"] = next_page_token
 
         try:
             response = requests.get(url, params=params)
             response.raise_for_status()
             data = response.json()
 
-            if 'error' in data:
+            if "error" in data:
                 raise YouTubeAPIError(f"API Error: {data['error']['message']}")
 
-            for item in data.get('items', []):
-                videos.append({
-                    'video_id': item['id']['videoId'],
-                    'title': item['snippet']['title'],
-                    'published_at': item['snippet']['publishedAt'],
-                    'description': item['snippet']['description'],
-                    'url': f"https://www.youtube.com/watch?v={item['id']['videoId']}",
-                })
+            for item in data.get("items", []):
+                videos.append(
+                    {
+                        "video_id": item["id"]["videoId"],
+                        "title": item["snippet"]["title"],
+                        "published_at": item["snippet"]["publishedAt"],
+                        "description": item["snippet"]["description"],
+                        "url": f"https://www.youtube.com/watch?v={item['id']['videoId']}",
+                    }
+                )
 
-            next_page_token = data.get('nextPageToken')
+            next_page_token = data.get("nextPageToken")
             if not next_page_token:
                 break
         except requests.RequestException as e:
@@ -207,13 +209,13 @@ def fetch_recent_videos(channel_url: str, cutoff_date: datetime) -> list[str]:
         raise YouTubeAPIError(f"Could not extract channel identifier from: {channel_url}")
 
     channel_id = channel_identifier
-    if channel_url.startswith('https://www.youtube.com/@'):
+    if channel_url.startswith("https://www.youtube.com/@"):
         channel_id = get_channel_id_from_handle(api_key, channel_identifier)
         if not channel_id:
             raise YouTubeAPIError(f"Could not find channel ID for @{channel_identifier}")
 
     videos = get_channel_videos(api_key, channel_id, cutoff_date)
-    return [video['url'] for video in videos]
+    return [video["url"] for video in videos]
 
 
 def fetch_videos_from_multiple_channels(
@@ -286,7 +288,7 @@ def save_channel_results_to_files(
 
     if all_urls:
         all_urls_file = output_path / "all_channels_urls.txt"
-        with open(all_urls_file, 'w', encoding='utf-8') as f:
+        with open(all_urls_file, "w", encoding="utf-8") as f:
             for url in all_urls:
                 f.write(f"{url}\n")
         print(f"Saved {len(all_urls)} total URLs to {all_urls_file}")
@@ -294,13 +296,13 @@ def save_channel_results_to_files(
     for channel_name, video_urls in results.items():
         if video_urls:
             channel_file = output_path / f"{channel_name}_urls.txt"
-            with open(channel_file, 'w', encoding='utf-8') as f:
+            with open(channel_file, "w", encoding="utf-8") as f:
                 for url in video_urls:
                     f.write(f"{url}\n")
             print(f"Saved {len(video_urls)} URLs from {channel_name} to {channel_file}")
 
     summary_file = output_path / "channel_summary.txt"
-    with open(summary_file, 'w', encoding='utf-8') as f:
+    with open(summary_file, "w", encoding="utf-8") as f:
         f.write(f"Video Fetch Summary - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write("=" * 50 + "\n\n")
         total_videos = sum(len(urls) for urls in results.values())

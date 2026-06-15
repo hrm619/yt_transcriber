@@ -8,6 +8,7 @@ from pathlib import Path
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -16,6 +17,7 @@ except ImportError:
 DOWNLOAD_DIR = Path("data/raw/audio")
 TRANSCRIPT_DIR = Path("data/processed/transcripts")
 SUMMARY_DIR = Path("data/processed/summaries")
+SUBTITLE_DIR = Path("data/processed/subtitles")
 CHUNKS_DIR = Path("data/raw/temp")
 CONFIG_DIR = Path("config")
 
@@ -30,5 +32,5 @@ GPT_MODEL = "gpt-4o"
 YT_COOKIES_FROM_BROWSER = os.getenv("YT_COOKIES_FROM_BROWSER")
 
 # Ensure directories exist
-for folder in (DOWNLOAD_DIR, TRANSCRIPT_DIR, SUMMARY_DIR, CHUNKS_DIR, CONFIG_DIR):
+for folder in (DOWNLOAD_DIR, TRANSCRIPT_DIR, SUMMARY_DIR, SUBTITLE_DIR, CHUNKS_DIR, CONFIG_DIR):
     folder.mkdir(parents=True, exist_ok=True)

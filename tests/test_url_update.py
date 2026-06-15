@@ -44,14 +44,14 @@ class TestURLExtraction:
 class TestAPIKey:
     """Test API key functionality."""
 
-    @patch.dict('os.environ', {}, clear=True)
+    @patch.dict("os.environ", {}, clear=True)
     def test_get_api_key_missing(self):
         with pytest.raises(YouTubeAPIError, match="YouTube API key not found"):
             get_api_key()
 
-    @patch.dict('os.environ', {'YOUTUBE_API_KEY': 'test_key_123'})
+    @patch.dict("os.environ", {"YOUTUBE_API_KEY": "test_key_123"})
     def test_get_api_key_present(self):
-        assert get_api_key() == 'test_key_123'
+        assert get_api_key() == "test_key_123"
 
 
 class TestLoadChannelsFromConfig:
@@ -93,23 +93,23 @@ class TestLoadChannelsFromConfig:
 class TestVideoFetching:
     """Test video fetching functionality."""
 
-    @patch('yt_transcriber.channels.requests.get')
-    @patch('yt_transcriber.channels.get_api_key')
+    @patch("yt_transcriber.channels.requests.get")
+    @patch("yt_transcriber.channels.get_api_key")
     def test_get_channel_videos_success(self, mock_get_api_key, mock_requests_get):
         from yt_transcriber.channels import get_channel_videos
 
-        mock_get_api_key.return_value = 'test_key'
+        mock_get_api_key.return_value = "test_key"
 
         mock_response = Mock()
         mock_response.raise_for_status.return_value = None
         mock_response.json.return_value = {
-            'items': [
+            "items": [
                 {
-                    'id': {'videoId': 'test_video_1'},
-                    'snippet': {
-                        'title': 'Test Video 1',
-                        'publishedAt': '2025-01-02T10:00:00Z',
-                        'description': 'Test description',
+                    "id": {"videoId": "test_video_1"},
+                    "snippet": {
+                        "title": "Test Video 1",
+                        "publishedAt": "2025-01-02T10:00:00Z",
+                        "description": "Test description",
                     },
                 }
             ]
@@ -117,23 +117,26 @@ class TestVideoFetching:
         mock_requests_get.return_value = mock_response
 
         cutoff_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
-        result = get_channel_videos('test_key', 'test_channel_id', cutoff_date)
+        result = get_channel_videos("test_key", "test_channel_id", cutoff_date)
 
         assert len(result) == 1
-        assert result[0]['video_id'] == 'test_video_1'
-        assert result[0]['url'] == 'https://www.youtube.com/watch?v=test_video_1'
+        assert result[0]["video_id"] == "test_video_1"
+        assert result[0]["url"] == "https://www.youtube.com/watch?v=test_video_1"
 
 
 class TestMultiChannelFetching:
     """Test multi-channel video fetching functionality."""
 
-    @patch('yt_transcriber.channels.fetch_recent_videos')
+    @patch("yt_transcriber.channels.fetch_recent_videos")
     def test_fetch_videos_from_multiple_channels(self, mock_fetch_recent_videos):
         from yt_transcriber.channels import fetch_videos_from_multiple_channels
 
         def mock_fetch(channel_url, cutoff_date):
             if "Channel1" in channel_url:
-                return ["https://www.youtube.com/watch?v=test1", "https://www.youtube.com/watch?v=test2"]
+                return [
+                    "https://www.youtube.com/watch?v=test1",
+                    "https://www.youtube.com/watch?v=test2",
+                ]
             elif "Channel2" in channel_url:
                 return ["https://www.youtube.com/watch?v=test3"]
             return []

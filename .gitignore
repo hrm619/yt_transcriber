@@ -45,6 +45,8 @@ htmlcov/
 downloads/
 transcripts/
 summaries/
+subtitles/
+*.vtt
 chunks/
 archive/
 backup/
